@@ -1,6 +1,8 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+
 import { Card } from "@/components/ui/Card";
 import { PageBody, PageHeader } from "@/components/ui/PageHeader";
 import { LoadingState } from "@/components/feedback/LoadingState";
@@ -25,15 +27,22 @@ type CommunityDetailPageProps = {
 export function CommunityDetailPage({
   id,
 }: CommunityDetailPageProps) {
-  const [community, setCommunity] = useState<Community | null>(null);
+  const router = useRouter();
+
+  const [community, setCommunity] =
+    useState<Community | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [retry, setRetry] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
   const [editing, setEditing] = useState(false);
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+
+  const [error, setError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,22 +52,28 @@ export function CommunityDetailPage({
         setLoading(true);
         setError(null);
 
-        const response = await fetch(`/api/communities/${id}`);
-
-        if (!response.ok) {
-          if (response.status === 404) {
-            throw new Error("La comunidad no existe.");
-          }
-
-          throw new Error(
-            "No se pudo cargar la información de la comunidad.",
-          );
-        }
+        const response = await fetch(
+          `/api/communities/${id}`,
+        );
 
         const result: {
           ok: boolean;
-          data: Community;
+          data?: Community;
+          error?: string;
         } = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            result.error ??
+              "No se pudo cargar la comunidad.",
+          );
+        }
+
+        if (!result.data) {
+          throw new Error(
+            "No se recibió información de la comunidad.",
+          );
+        }
 
         if (!cancelled) {
           setCommunity(result.data);
@@ -71,7 +86,7 @@ export function CommunityDetailPage({
           setError(
             err instanceof Error
               ? err.message
-              : "No se pudo conectar con la API de comunidades.",
+              : "No se pudo conectar con la API.",
           );
           setLoading(false);
         }
@@ -85,14 +100,11 @@ export function CommunityDetailPage({
     };
   }, [id, retry]);
 
-  async function handleSave(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    const trimmedName = name.trim();
-    const trimmedDescription = description.trim();
-
-    if (!trimmedName) {
-      setError("El nombre de la comunidad es obligatorio.");
+  async function handleSave() {
+    if (!name.trim()) {
+      setError(
+        "El nombre de la comunidad es obligatorio.",
+      );
       return;
     }
 
@@ -100,16 +112,19 @@ export function CommunityDetailPage({
     setError(null);
 
     try {
-      const response = await fetch(`/api/communities/${id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
+      const response = await fetch(
+        `/api/communities/${id}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: name.trim(),
+            description: description.trim(),
+          }),
         },
-        body: JSON.stringify({
-          name: trimmedName,
-          description: trimmedDescription,
-        }),
-      });
+      );
 
       const result: {
         ok: boolean;
@@ -117,9 +132,16 @@ export function CommunityDetailPage({
         error?: string;
       } = await response.json();
 
-      if (!response.ok || !result.data) {
+      if (!response.ok) {
         throw new Error(
-          result.error ?? "No se pudo actualizar la comunidad.",
+          result.error ??
+            "No se pudo actualizar la comunidad.",
+        );
+      }
+
+      if (!result.data) {
+        throw new Error(
+          "No se recibió la comunidad actualizada.",
         );
       }
 
@@ -138,19 +160,85 @@ export function CommunityDetailPage({
     }
   }
 
+  function handleCancelEdit() {
+    if (!community) {
+      return;
+    }
+
+    setName(community.name);
+    setDescription(community.description);
+    setError(null);
+    setEditing(false);
+  }
+
+  async function handleDelete() {
+    if (!community) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `¿Seguro que quieres eliminar "${community.name}"?\n\nEsta acción no se puede deshacer.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeleting(true);
+    setError(null);
+
+    try {
+      const response = await fetch(
+        "/api/communities",
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            id: community.id,
+          }),
+        },
+      );
+
+      const result: {
+        ok: boolean;
+        error?: string;
+      } = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.error ??
+            "No se pudo eliminar la comunidad.",
+        );
+      }
+
+      router.push("/communities");
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "No se pudo eliminar la comunidad.",
+      );
+      setDeleting(false);
+    }
+  }
+
   if (loading) {
     return (
       <PageBody>
         <PageHeader title="Cargando comunidad" />
 
         <Card ariaLabel="Cargando detalles">
-          <LoadingState label="Consultando los detalles de la comunidad..." />
+          <LoadingState
+            label="Consultando los detalles de la comunidad..."
+          />
         </Card>
       </PageBody>
     );
   }
 
-  if (error || !community) {
+  if (error && !community) {
     return (
       <PageBody>
         <PageHeader title="Detalle de Comunidad" />
@@ -158,14 +246,17 @@ export function CommunityDetailPage({
         <Card ariaLabel="Error de carga">
           <ErrorState
             title="Ocurrió un problema"
-            description={error || "Comunidad no encontrada."}
+            description={error}
             onRetry={() => {
               setRetry((value) => !value);
             }}
           />
 
           <div style={{ marginTop: "1rem" }}>
-            <Button href="/communities" variant="secondary">
+            <Button
+              href="/communities"
+              variant="secondary"
+            >
               Volver a comunidades
             </Button>
           </div>
@@ -174,19 +265,22 @@ export function CommunityDetailPage({
     );
   }
 
+  if (!community) {
+    return null;
+  }
+
   return (
     <PageBody>
       <PageHeader
         title={community.name}
-        description="Administra la información y consulta las estadísticas de la comunidad."
+        description="Administra la información y configuración de esta comunidad."
       />
 
       {error ? (
-        <Card ariaLabel="Error">
+        <Card ariaLabel="Error de comunidad">
           <ErrorState
-            title="No se pudo guardar"
+            title="Ocurrió un problema"
             description={error}
-            onRetry={() => setError(null)}
           />
         </Card>
       ) : null}
@@ -198,17 +292,14 @@ export function CommunityDetailPage({
           marginTop: "1.5rem",
         }}
       >
-        {editing ? (
-          <Card ariaLabel="Editar comunidad">
-            <form
-              onSubmit={handleSave}
+        <Card ariaLabel="Información de la comunidad">
+          {editing ? (
+            <div
               style={{
                 display: "grid",
                 gap: "1rem",
               }}
             >
-              <h2>Editar comunidad</h2>
-
               <div>
                 <label htmlFor="community-name">
                   Nombre
@@ -218,9 +309,11 @@ export function CommunityDetailPage({
                   id="community-name"
                   type="text"
                   value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  placeholder="Nombre de la comunidad"
-                  required
+                  onChange={(event) =>
+                    setName(event.target.value)
+                  }
+                  disabled={saving}
+                  autoFocus
                 />
               </div>
 
@@ -235,8 +328,8 @@ export function CommunityDetailPage({
                   onChange={(event) =>
                     setDescription(event.target.value)
                   }
-                  placeholder="Descripción de la comunidad"
-                  rows={4}
+                  disabled={saving}
+                  rows={5}
                 />
               </div>
 
@@ -247,102 +340,103 @@ export function CommunityDetailPage({
                   flexWrap: "wrap",
                 }}
               >
-                <button type="submit" disabled={saving}>
-                  {saving ? "Guardando..." : "Guardar cambios"}
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={saving}
+                >
+                  {saving
+                    ? "Guardando..."
+                    : "Guardar cambios"}
                 </button>
+
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleCancelEdit}
+                  disabled={saving}
+                >
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "flex-start",
+                  gap: "1rem",
+                  flexWrap: "wrap",
+                }}
+              >
+                <div>
+                  <h2
+                    style={{
+                      fontSize: "1.5rem",
+                      fontWeight: "bold",
+                      marginBottom: "0.5rem",
+                    }}
+                  >
+                    {community.name}
+                  </h2>
+
+                  <p
+                    style={{
+                      color:
+                        "var(--color-text-secondary, #666)",
+                      marginBottom: "1rem",
+                      whiteSpace: "pre-wrap",
+                    }}
+                  >
+                    {community.description ||
+                      "Sin descripción disponible."}
+                  </p>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "0.5rem",
+                      alignItems: "center",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "0.875rem",
+                        fontWeight: "500",
+                      }}
+                    >
+                      Estado:
+                    </span>
+
+                    <Badge
+                      variant={
+                        community.status === "active"
+                          ? "success"
+                          : "neutral"
+                      }
+                    >
+                      {community.status === "active"
+                        ? "Activo"
+                        : "Inactivo"}
+                    </Badge>
+                  </div>
+                </div>
 
                 <button
                   type="button"
                   onClick={() => {
-                    setName(community.name);
-                    setDescription(community.description);
                     setError(null);
-                    setEditing(false);
+                    setEditing(true);
                   }}
-                  disabled={saving}
                 >
-                  Cancelar
+                  Editar
                 </button>
               </div>
-            </form>
-          </Card>
-        ) : (
-          <Card ariaLabel="Información de la comunidad">
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "flex-start",
-                flexWrap: "wrap",
-                gap: "1rem",
-              }}
-            >
-              <div>
-                <h2
-                  style={{
-                    fontSize: "1.5rem",
-                    fontWeight: "bold",
-                    marginBottom: "0.5rem",
-                  }}
-                >
-                  {community.name}
-                </h2>
-
-                <p
-                  style={{
-                    color: "var(--color-text-secondary, #666)",
-                    marginBottom: "1rem",
-                    whiteSpace: "pre-wrap",
-                  }}
-                >
-                  {community.description ||
-                    "Sin descripción disponible."}
-                </p>
-
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "0.5rem",
-                    alignItems: "center",
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: "0.875rem",
-                      fontWeight: "500",
-                    }}
-                  >
-                    Estado:
-                  </span>
-
-                  <Badge
-                    variant={
-                      community.status === "active"
-                        ? "success"
-                        : "neutral"
-                    }
-                  >
-                    {community.status === "active"
-                      ? "Activo"
-                      : "Inactivo"}
-                  </Badge>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setName(community.name);
-                  setDescription(community.description);
-                  setError(null);
-                  setEditing(true);
-                }}
-              >
-                Editar comunidad
-              </button>
             </div>
-          </Card>
-        )}
+          )}
+        </Card>
 
         <section
           aria-label="Estadísticas generales"
@@ -372,7 +466,8 @@ export function CommunityDetailPage({
 
               <span
                 style={{
-                  color: "var(--color-text-secondary, #666)",
+                  color:
+                    "var(--color-text-secondary, #666)",
                   fontSize: "0.875rem",
                 }}
               >
@@ -400,11 +495,12 @@ export function CommunityDetailPage({
 
               <span
                 style={{
-                  color: "var(--color-text-secondary, #666)",
+                  color:
+                    "var(--color-text-secondary, #666)",
                   fontSize: "0.875rem",
                 }}
               >
-                Bots Conectados
+                Bots conectados
               </span>
             </div>
           </Card>
@@ -428,21 +524,43 @@ export function CommunityDetailPage({
 
               <span
                 style={{
-                  color: "var(--color-text-secondary, #666)",
+                  color:
+                    "var(--color-text-secondary, #666)",
                   fontSize: "0.875rem",
                 }}
               >
-                Canales de Comunicación
+                Canales
               </span>
             </div>
           </Card>
         </section>
 
-        <div>
-          <Button href="/communities" variant="secondary">
-            Volver a comunidades
-          </Button>
-        </div>
+        <Card ariaLabel="Acciones de comunidad">
+          <div
+            style={{
+              display: "flex",
+              gap: "0.75rem",
+              flexWrap: "wrap",
+            }}
+          >
+            <Button
+              href="/communities"
+              variant="secondary"
+            >
+              Volver a comunidades
+            </Button>
+
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={deleting}
+            >
+              {deleting
+                ? "Eliminando..."
+                : "Eliminar comunidad"}
+            </button>
+          </div>
+        </Card>
       </div>
     </PageBody>
   );
