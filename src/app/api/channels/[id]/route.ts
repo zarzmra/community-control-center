@@ -24,6 +24,11 @@ export async function PUT(
     const name =
       typeof body.name === "string" ? body.name.trim() : "";
 
+    const communityId =
+      typeof body.communityId === "string"
+        ? body.communityId.trim()
+        : "";
+
     const type =
       body.type === "whatsapp" ||
       body.type === "web" ||
@@ -38,11 +43,12 @@ export async function PUT(
         ? body.status
         : null;
 
-    if (!id || !name || !type || !status) {
+    if (!id || !name || !communityId || !type || !status) {
       return NextResponse.json(
         {
           ok: false,
-          error: "Los datos del canal son obligatorios.",
+          error:
+            "El nombre, comunidad, tipo y estado del canal son obligatorios.",
         },
         { status: 400 },
       );
@@ -55,8 +61,9 @@ export async function PUT(
           name = $1,
           type = $2,
           status = $3,
+          community_id = $4,
           updated_at = now()
-        WHERE id = $4
+        WHERE id = $5
         RETURNING
           id,
           name,
@@ -64,7 +71,7 @@ export async function PUT(
           status,
           community_id
       `,
-      [name, type, status, id],
+      [name, type, status, communityId, id],
     );
 
     if (result.rowCount === 0) {
