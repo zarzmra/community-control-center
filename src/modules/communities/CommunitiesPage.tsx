@@ -19,6 +19,7 @@ export function CommunitiesPage() {
   const [communities, setCommunities] = useState<Community[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
 
@@ -125,6 +126,51 @@ export function CommunitiesPage() {
       );
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function handleDelete(community: Community) {
+    const confirmed = window.confirm(
+      `¿Seguro que quieres eliminar "${community.name}"?\n\nEsta acción no se puede deshacer.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingId(community.id);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/communities", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: community.id,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.error ?? "No se pudo eliminar la comunidad.",
+        );
+      }
+
+      setCommunities((current) =>
+        current.filter((item) => item.id !== community.id),
+      );
+    } catch (error) {
+      setError(
+        error instanceof Error
+          ? error.message
+          : "No se pudo eliminar la comunidad.",
+      );
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -258,6 +304,16 @@ export function CommunitiesPage() {
               <p>
                 Canales: {community.channels}
               </p>
+
+              <button
+                type="button"
+                onClick={() => handleDelete(community)}
+                disabled={deletingId === community.id}
+              >
+                {deletingId === community.id
+                  ? "Eliminando..."
+                  : "Eliminar comunidad"}
+              </button>
             </Card>
           ))}
         </section>
