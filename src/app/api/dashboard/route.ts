@@ -1,9 +1,19 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
 
+type RecentCommunity = {
+  id: string;
+  name: string;
+  description: string;
+  status: "active" | "inactive";
+  members: number;
+  bots: number;
+  channels: number;
+};
+
 export async function GET() {
   try {
-    const result = await query<{
+    const statsResult = await query<{
       communities: number;
       active_bots: number;
       automations: number;
@@ -14,7 +24,21 @@ export async function GET() {
         (SELECT COUNT(*)::int FROM automations WHERE status = 'active') AS automations
     `);
 
-    const stats = result.rows[0];
+    const communitiesResult = await query<RecentCommunity>(`
+      SELECT
+        id,
+        name,
+        description,
+        status,
+        members,
+        bots,
+        channels
+      FROM communities
+      ORDER BY created_at DESC
+      LIMIT 5
+    `);
+
+    const stats = statsResult.rows[0];
 
     return NextResponse.json({
       ok: true,
@@ -24,6 +48,7 @@ export async function GET() {
         users: null,
         messages: null,
         automations: stats.automations,
+        recentCommunities: communitiesResult.rows,
       },
       services: [
         {
