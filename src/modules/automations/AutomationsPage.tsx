@@ -25,9 +25,11 @@ export function AutomationsPage() {
   const [communities, setCommunities] = useState<Community[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const [name, setName] = useState("");
   const [communityId, setCommunityId] = useState("");
@@ -37,14 +39,20 @@ export function AutomationsPage() {
 
   async function loadAutomations() {
     try {
+      setLoading(true);
+
       const response = await fetch("/api/automations");
 
       if (!response.ok) {
-        throw new Error("No se pudieron cargar las automatizaciones.");
+        throw new Error(
+          "No se pudieron cargar las automatizaciones.",
+        );
       }
 
-      const result: { ok: boolean; data: Automation[] } =
-        await response.json();
+      const result: {
+        ok: boolean;
+        data: Automation[];
+      } = await response.json();
 
       setAutomations(result.data);
       setError(null);
@@ -64,16 +72,22 @@ export function AutomationsPage() {
       const response = await fetch("/api/communities");
 
       if (!response.ok) {
-        throw new Error("No se pudieron cargar las comunidades.");
+        throw new Error(
+          "No se pudieron cargar las comunidades.",
+        );
       }
 
-      const result: { ok: boolean; data: Community[] } =
-        await response.json();
+      const result: {
+        ok: boolean;
+        data: Community[];
+      } = await response.json();
 
       setCommunities(result.data);
 
       if (result.data.length > 0) {
-        setCommunityId((current) => current || result.data[0].id);
+        setCommunityId(
+          (current) => current || result.data[0].id,
+        );
       }
     } catch (err) {
       setError(
@@ -93,11 +107,44 @@ export function AutomationsPage() {
     return () => window.clearTimeout(timer);
   }, []);
 
-  async function handleCreate(event: FormEvent<HTMLFormElement>) {
+  function resetForm() {
+    setName("");
+    setTrigger("");
+    setStatus("draft");
+    setEditingId(null);
+  }
+
+  function startCreate() {
+    resetForm();
+    setError(null);
+    setShowForm(true);
+  }
+
+  function startEdit(automation: Automation) {
+    setName(automation.name);
+    setCommunityId(automation.community_id);
+    setStatus(automation.status);
+    setTrigger(automation.trigger);
+    setEditingId(automation.id);
+    setError(null);
+    setShowForm(true);
+  }
+
+  function cancelForm() {
+    resetForm();
+    setError(null);
+    setShowForm(false);
+  }
+
+  async function handleCreate(
+    event: FormEvent<HTMLFormElement>,
+  ) {
     event.preventDefault();
 
     if (!name.trim()) {
-      setError("El nombre de la automatización es obligatorio.");
+      setError(
+        "El nombre de la automatización es obligatorio.",
+      );
       return;
     }
 
@@ -127,13 +174,12 @@ export function AutomationsPage() {
 
       if (!response.ok) {
         throw new Error(
-          result.error ?? "No se pudo crear la automatización.",
+          result.error ??
+            "No se pudo crear la automatización.",
         );
       }
 
-      setName("");
-      setTrigger("");
-      setStatus("draft");
+      resetForm();
       setShowForm(false);
 
       await loadAutomations();
@@ -145,6 +191,86 @@ export function AutomationsPage() {
       );
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function handleSave(
+    event: FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    if (!editingId) {
+      return;
+    }
+
+    if (!name.trim()) {
+      setError(
+        "El nombre de la automatización es obligatorio.",
+      );
+      return;
+    }
+
+    if (!communityId) {
+      setError("Debes seleccionar una comunidad.");
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+
+    try {
+      const response = await fetch(
+        `/api/automations/${editingId}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: name.trim(),
+            status,
+            trigger: trigger.trim(),
+          }),
+        },
+      );
+
+      const result: {
+        ok: boolean;
+        data?: Automation;
+        error?: string;
+      } = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.error ??
+            "No se pudo actualizar la automatización.",
+        );
+      }
+
+      if (!result.data) {
+        throw new Error(
+          "No se recibió la automatización actualizada.",
+        );
+      }
+
+      setAutomations((current) =>
+        current.map((item) =>
+          item.id === result.data!.id
+            ? result.data!
+            : item,
+        ),
+      );
+
+      resetForm();
+      setShowForm(false);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "No se pudo actualizar la automatización.",
+      );
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -172,13 +298,20 @@ export function AutomationsPage() {
 
       if (!response.ok) {
         throw new Error(
-          result.error ?? "No se pudo eliminar la automatización.",
+          result.error ??
+            "No se pudo eliminar la automatización.",
         );
       }
 
       setAutomations((current) =>
-        current.filter((item) => item.id !== automation.id),
+        current.filter(
+          (item) => item.id !== automation.id,
+        ),
       );
+
+      if (editingId === automation.id) {
+        cancelForm();
+      }
     } catch (err) {
       setError(
         err instanceof Error
@@ -192,24 +325,37 @@ export function AutomationsPage() {
 
   function getCommunityName(id: string) {
     return (
-      communities.find((community) => community.id === id)?.name ??
-      "Comunidad desconocida"
+      communities.find(
+        (community) => community.id === id,
+      )?.name ?? "Comunidad desconocida"
     );
   }
 
   function getStatusLabel(
     automationStatus: Automation["status"],
   ) {
-    if (automationStatus === "active") return "Activa";
-    if (automationStatus === "paused") return "Pausada";
+    if (automationStatus === "active") {
+      return "Activa";
+    }
+
+    if (automationStatus === "paused") {
+      return "Pausada";
+    }
+
     return "Borrador";
   }
 
   function getStatusVariant(
     automationStatus: Automation["status"],
   ): "success" | "neutral" | "warning" {
-    if (automationStatus === "active") return "success";
-    if (automationStatus === "paused") return "warning";
+    if (automationStatus === "active") {
+      return "success";
+    }
+
+    if (automationStatus === "paused") {
+      return "warning";
+    }
+
     return "neutral";
   }
 
@@ -229,30 +375,59 @@ export function AutomationsPage() {
       >
         <Button
           type="button"
-          onClick={() => setShowForm((visible) => !visible)}
+          onClick={() => {
+            if (showForm) {
+              cancelForm();
+            } else {
+              startCreate();
+            }
+          }}
         >
-          {showForm ? "Cancelar" : "Crear automatización"}
+          {showForm
+            ? "Cancelar"
+            : "Crear automatización"}
         </Button>
       </div>
 
       {showForm ? (
-        <Card ariaLabel="Crear automatización">
+        <Card
+          ariaLabel={
+            editingId
+              ? "Editar automatización"
+              : "Crear automatización"
+          }
+        >
           <form
-            onSubmit={handleCreate}
+            onSubmit={
+              editingId ? handleSave : handleCreate
+            }
             style={{
               display: "grid",
               gap: "1rem",
             }}
           >
             <div>
-              <label htmlFor="automation-name">Nombre</label>
+              <h2>
+                {editingId
+                  ? "Editar automatización"
+                  : "Nueva automatización"}
+              </h2>
+            </div>
+
+            <div>
+              <label htmlFor="automation-name">
+                Nombre
+              </label>
 
               <input
                 id="automation-name"
                 type="text"
                 value={name}
-                onChange={(event) => setName(event.target.value)}
+                onChange={(event) =>
+                  setName(event.target.value)
+                }
                 placeholder="Ej. Bienvenida automática"
+                disabled={creating || saving}
                 required
               />
             </div>
@@ -268,6 +443,7 @@ export function AutomationsPage() {
                 onChange={(event) =>
                   setCommunityId(event.target.value)
                 }
+                disabled={creating || saving}
                 required
               >
                 <option value="">
@@ -298,6 +474,7 @@ export function AutomationsPage() {
                   setTrigger(event.target.value)
                 }
                 placeholder="Ej. Nuevo miembro"
+                disabled={creating || saving}
               />
             </div>
 
@@ -314,6 +491,7 @@ export function AutomationsPage() {
                     event.target.value as Automation["status"],
                   )
                 }
+                disabled={creating || saving}
               >
                 <option value="draft">Borrador</option>
                 <option value="active">Activa</option>
@@ -321,11 +499,37 @@ export function AutomationsPage() {
               </select>
             </div>
 
-            <Button type="submit" disabled={creating}>
-              {creating
-                ? "Creando..."
-                : "Crear automatización"}
-            </Button>
+            <div
+              style={{
+                display: "flex",
+                gap: "0.75rem",
+                flexWrap: "wrap",
+              }}
+            >
+              <Button
+                type="submit"
+                disabled={creating || saving}
+              >
+                {editingId
+                  ? saving
+                    ? "Guardando..."
+                    : "Guardar cambios"
+                  : creating
+                    ? "Creando..."
+                    : "Crear automatización"}
+              </Button>
+
+              {editingId ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={cancelForm}
+                  disabled={saving}
+                >
+                  Cancelar edición
+                </Button>
+              ) : null}
+            </div>
           </form>
         </Card>
       ) : null}
@@ -348,7 +552,9 @@ export function AutomationsPage() {
         </Card>
       ) : null}
 
-      {!loading && !error && automations.length === 0 ? (
+      {!loading &&
+      !error &&
+      automations.length === 0 ? (
         <Card ariaLabel="Sin automatizaciones">
           <EmptyState
             title="Aún no hay automatizaciones"
@@ -384,12 +590,15 @@ export function AutomationsPage() {
 
                   <p>
                     Comunidad:{" "}
-                    {getCommunityName(automation.community_id)}
+                    {getCommunityName(
+                      automation.community_id,
+                    )}
                   </p>
 
                   <p>
                     Disparador:{" "}
-                    {automation.trigger || "Sin configurar"}
+                    {automation.trigger ||
+                      "Sin configurar"}
                   </p>
 
                   <Badge
@@ -397,19 +606,43 @@ export function AutomationsPage() {
                       automation.status,
                     )}
                   >
-                    {getStatusLabel(automation.status)}
+                    {getStatusLabel(
+                      automation.status,
+                    )}
                   </Badge>
                 </div>
 
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => handleDelete(automation)}
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "0.5rem",
+                    flexWrap: "wrap",
+                  }}
                 >
-                  {deletingId === automation.id
-                    ? "Eliminando..."
-                    : "Eliminar"}
-                </Button>
+                  <Button
+                    type="button"
+                    onClick={() =>
+                      startEdit(automation)
+                    }
+                  >
+                    Editar
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() =>
+                      handleDelete(automation)
+                    }
+                    disabled={
+                      deletingId === automation.id
+                    }
+                  >
+                    {deletingId === automation.id
+                      ? "Eliminando..."
+                      : "Eliminar"}
+                  </Button>
+                </div>
               </div>
             </Card>
           ))}
