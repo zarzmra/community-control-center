@@ -16,6 +16,7 @@ type ButtonAsButton = CommonProps & {
   href?: undefined;
   type?: "button" | "submit";
   onClick?: () => void;
+  disabled?: boolean;
   ariaExpanded?: boolean;
   ariaControls?: string;
 };
@@ -24,6 +25,7 @@ type ButtonAsLink = CommonProps & {
   href: AppPath;
   type?: never;
   onClick?: never;
+  disabled?: never;
   ariaExpanded?: never;
   ariaControls?: never;
 };
@@ -39,7 +41,11 @@ export function Button(props: ButtonProps) {
 
   if (props.href) {
     return (
-      <Link href={props.href} className={className} aria-label={props.ariaLabel}>
+      <Link
+        href={props.href}
+        className={className}
+        aria-label={props.ariaLabel}
+      >
         {props.children}
       </Link>
     );
@@ -50,6 +56,7 @@ export function Button(props: ButtonProps) {
       type={props.type ?? "button"}
       className={className}
       onClick={props.onClick}
+      disabled={props.disabled}
       aria-label={props.ariaLabel}
       aria-expanded={props.ariaExpanded}
       aria-controls={props.ariaControls}
