@@ -112,6 +112,12 @@ export function AutomationsPage() {
     setTrigger("");
     setStatus("draft");
     setEditingId(null);
+
+    if (communities.length > 0) {
+      setCommunityId(communities[0].id);
+    } else {
+      setCommunityId("");
+    }
   }
 
   function startCreate() {
@@ -228,6 +234,7 @@ export function AutomationsPage() {
           },
           body: JSON.stringify({
             name: name.trim(),
+            communityId,
             status,
             trigger: trigger.trim(),
           }),

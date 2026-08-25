@@ -24,6 +24,11 @@ export async function PUT(
     const name =
       typeof body.name === "string" ? body.name.trim() : "";
 
+    const communityId =
+      typeof body.communityId === "string"
+        ? body.communityId.trim()
+        : "";
+
     const trigger =
       typeof body.trigger === "string"
         ? body.trigger.trim()
@@ -36,11 +41,12 @@ export async function PUT(
         ? body.status
         : null;
 
-    if (!id || !name || !status) {
+    if (!id || !name || !communityId || !status) {
       return NextResponse.json(
         {
           ok: false,
-          error: "Los datos de la automatización son obligatorios.",
+          error:
+            "El nombre, comunidad y estado de la automatización son obligatorios.",
         },
         { status: 400 },
       );
@@ -51,10 +57,11 @@ export async function PUT(
         UPDATE automations
         SET
           name = $1,
-          trigger = $2,
-          status = $3,
+          community_id = $2,
+          trigger = $3,
+          status = $4,
           updated_at = now()
-        WHERE id = $4
+        WHERE id = $5
         RETURNING
           id,
           name,
@@ -62,7 +69,7 @@ export async function PUT(
           status,
           trigger
       `,
-      [name, trigger, status, id],
+      [name, communityId, trigger, status, id],
     );
 
     if (result.rowCount === 0) {
