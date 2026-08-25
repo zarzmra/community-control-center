@@ -90,17 +90,6 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
-
-    if (!id) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "El ID de la comunidad es obligatorio.",
-        },
-        { status: 400 },
-      );
-    }
-
     const body = await request.json();
 
     const name =
@@ -113,35 +102,66 @@ export async function PUT(
         ? body.description.trim()
         : "";
 
-    if (!name) {
+    const status =
+      body.status === "active" ||
+      body.status === "inactive"
+        ? body.status
+        : null;
+
+    if (!id || !name) {
       return NextResponse.json(
         {
           ok: false,
-          error: "El nombre de la comunidad es obligatorio.",
+          error: "El ID y nombre de la comunidad son obligatorios.",
         },
         { status: 400 },
       );
     }
 
-    const result = await query<Community>(
-      `
-        UPDATE communities
-        SET
-          name = $1,
-          description = $2,
-          updated_at = now()
-        WHERE id = $3
-        RETURNING
-          id,
-          name,
-          description,
-          status,
-          members,
-          bots,
-          channels
-      `,
-      [name, description, id],
-    );
+    let result;
+
+    if (status) {
+      result = await query<Community>(
+        `
+          UPDATE communities
+          SET
+            name = $1,
+            description = $2,
+            status = $3,
+            updated_at = now()
+          WHERE id = $4
+          RETURNING
+            id,
+            name,
+            description,
+            status,
+            members,
+            bots,
+            channels
+        `,
+        [name, description, status, id],
+      );
+    } else {
+      result = await query<Community>(
+        `
+          UPDATE communities
+          SET
+            name = $1,
+            description = $2,
+            updated_at = now()
+          WHERE id = $3
+          RETURNING
+            id,
+            name,
+            description,
+            status,
+            members,
+            bots,
+            channels
+        `,
+        [name, description, id],
+      );
+    }
 
     if (result.rowCount === 0) {
       return NextResponse.json(
@@ -162,6 +182,56 @@ export async function PUT(
       {
         ok: false,
         error: "No se pudo actualizar la comunidad.",
+      },
+      { status: 500 },
+    );
+  }
+}
+
+export async function DELETE(
+  _request: Request,
+  { params }: RouteContext,
+) {
+  try {
+    const { id } = await params;
+
+    if (!id) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "El ID de la comunidad es obligatorio.",
+        },
+        { status: 400 },
+      );
+    }
+
+    const result = await query(
+      `
+        DELETE FROM communities
+        WHERE id = $1
+      `,
+      [id],
+    );
+
+    if (result.rowCount === 0) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "La comunidad no existe.",
+        },
+        { status: 404 },
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      data: { id },
+    });
+  } catch {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "No se pudo eliminar la comunidad.",
       },
       { status: 500 },
     );
