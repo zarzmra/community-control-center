@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { PageBody, PageHeader } from "@/components/ui/PageHeader";
 import { MetricCard } from "@/modules/dashboard/components/MetricCard";
 import { ServiceStatusList } from "@/modules/dashboard/components/ServiceStatusList";
-import type { DashboardApiResponse } from "@/types/dashboard";
+import type { DashboardApiResponse, RecentCommunity } from "@/types/dashboard";
 import type { DashboardMetric } from "@/types";
 import styles from "./DashboardPage.module.css";
 
@@ -64,6 +65,9 @@ export function DashboardPage() {
         }))
       : [];
 
+  const recentCommunities: readonly RecentCommunity[] =
+    dashboard?.data.recentCommunities ?? [];
+
   return (
     <PageBody>
       <PageHeader
@@ -92,6 +96,7 @@ export function DashboardPage() {
             title="Actividad reciente"
             description="Los eventos del sistema aparecerán aquí cuando existan."
           />
+
           <EmptyState
             title="Sin actividad"
             description="No hay actividad reciente. Esta sección se llenará cuando el backend registre eventos."
@@ -103,6 +108,7 @@ export function DashboardPage() {
             title="Estado de servicios"
             description="Estado actual de los servicios configurados."
           />
+
           <ServiceStatusList
             services={dashboard?.services ?? []}
           />
@@ -112,14 +118,46 @@ export function DashboardPage() {
       <Card ariaLabel="Comunidades recientes">
         <CardHeader
           title="Comunidades recientes"
-          description="Las comunidades registradas aparecerán aquí."
+          description="Las comunidades registradas en el sistema."
         />
-        <EmptyState
-          title="Sin comunidades"
-          description="Todavía no hay comunidades registradas."
-          actionLabel="Ver comunidades"
-          actionHref="/communities"
-        />
+
+        {recentCommunities.length === 0 ? (
+          <EmptyState
+            title="Sin comunidades"
+            description="Todavía no hay comunidades registradas."
+            actionLabel="Ver comunidades"
+            actionHref="/communities"
+          />
+        ) : (
+          <div>
+            {recentCommunities.map((community) => (
+              <Link
+                key={community.id}
+                href={`/communities/${community.id}`}
+              >
+                <article>
+                  <h3>{community.name}</h3>
+
+                  {community.description ? (
+                    <p>{community.description}</p>
+                  ) : null}
+
+                  <p>
+                    {community.members} miembros ·{" "}
+                    {community.bots} bots ·{" "}
+                    {community.channels} canales
+                  </p>
+                </article>
+              </Link>
+            ))}
+
+            <div>
+              <Link href="/communities">
+                Ver todas las comunidades →
+              </Link>
+            </div>
+          </div>
+        )}
       </Card>
     </PageBody>
   );
