@@ -305,15 +305,28 @@ export function CommunitiesPage() {
                 Canales: {community.channels}
               </p>
 
-              <button
-                type="button"
-                onClick={() => handleDelete(community)}
-                disabled={deletingId === community.id}
+              <div
+                style={{
+                  display: "flex",
+                  gap: "0.75rem",
+                  marginTop: "1rem",
+                  flexWrap: "wrap",
+                }}
               >
-                {deletingId === community.id
-                  ? "Eliminando..."
-                  : "Eliminar comunidad"}
-              </button>
+                <a href={`/communities/${community.id}`}>
+                  Ver detalles
+                </a>
+
+                <button
+                  type="button"
+                  onClick={() => handleDelete(community)}
+                  disabled={deletingId === community.id}
+                >
+                  {deletingId === community.id
+                    ? "Eliminando..."
+                    : "Eliminar comunidad"}
+                </button>
+              </div>
             </Card>
           ))}
         </section>
