@@ -120,7 +120,7 @@ export function BotsPage() {
     setError(null);
   }
 
-  async function handleCreate(
+  async function handleSubmit(
     event: FormEvent<HTMLFormElement>,
   ) {
     event.preventDefault();
@@ -342,7 +342,7 @@ export function BotsPage() {
           }
         >
           <form
-            onSubmit={handleCreate}
+            onSubmit={handleSubmit}
             style={{
               display: "grid",
               gap: "1rem",
