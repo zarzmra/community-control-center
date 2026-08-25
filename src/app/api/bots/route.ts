@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { recordAuditLog } from "@/lib/audit";
 
 type Bot = {
   id: string;
@@ -86,10 +87,18 @@ export async function POST(request: Request) {
       [name, communityId, status],
     );
 
+    const bot = result.rows[0];
+
+    await recordAuditLog(
+      "bot_created",
+      `Se creó el bot "${bot.name}"`,
+      bot.community_id,
+    );
+
     return NextResponse.json(
       {
         ok: true,
-        data: result.rows[0],
+        data: bot,
       },
       { status: 201 },
     );

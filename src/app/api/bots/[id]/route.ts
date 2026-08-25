@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { recordAuditLog } from "@/lib/audit";
 
 type Bot = {
   id: string;
@@ -69,9 +70,17 @@ export async function PUT(
       );
     }
 
+    const bot = result.rows[0];
+
+    await recordAuditLog(
+      "bot_updated",
+      `Se actualizó el bot "${bot.name}"`,
+      bot.community_id,
+    );
+
     return NextResponse.json({
       ok: true,
-      data: result.rows[0],
+      data: bot,
     });
   } catch {
     return NextResponse.json(
@@ -91,6 +100,14 @@ export async function DELETE(
   try {
     const { id } = await params;
 
+    // Get info before deleting for the log
+    const botResult = await query<Bot>(
+      "SELECT name, community_id FROM bots WHERE id = $1",
+      [id],
+    );
+
+    const botInfo = botResult.rows[0];
+
     const result = await query(
       `
         DELETE FROM bots
@@ -106,6 +123,14 @@ export async function DELETE(
           error: "El bot no existe.",
         },
         { status: 404 },
+      );
+    }
+
+    if (botInfo) {
+      await recordAuditLog(
+        "bot_deleted",
+        `Se eliminó el bot "${botInfo.name}"`,
+        botInfo.community_id,
       );
     }
 

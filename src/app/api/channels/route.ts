@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { recordAuditLog } from "@/lib/audit";
 
 type Channel = {
   id: string;
@@ -94,10 +95,18 @@ export async function POST(request: Request) {
       [name, type, status, communityId],
     );
 
+    const channel = result.rows[0];
+
+    await recordAuditLog(
+      "channel_created",
+      `Se creó el canal "${channel.name}"`,
+      channel.community_id,
+    );
+
     return NextResponse.json(
       {
         ok: true,
-        data: result.rows[0],
+        data: channel,
       },
       { status: 201 },
     );

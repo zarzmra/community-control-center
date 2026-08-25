@@ -11,6 +11,14 @@ type RecentCommunity = {
   channels: number;
 };
 
+type AuditLog = {
+  id: string;
+  event_type: string;
+  details: string;
+  community_id: string | null;
+  created_at: string;
+};
+
 export async function GET() {
   try {
     const statsResult = await query<{
@@ -38,6 +46,18 @@ export async function GET() {
       LIMIT 5
     `);
 
+    const logsResult = await query<AuditLog>(`
+      SELECT
+        id,
+        event_type,
+        details,
+        community_id,
+        created_at
+      FROM audit_logs
+      ORDER BY created_at DESC
+      LIMIT 5
+    `);
+
     const stats = statsResult.rows[0];
 
     return NextResponse.json({
@@ -49,6 +69,7 @@ export async function GET() {
         messages: null,
         automations: stats.automations,
         recentCommunities: communitiesResult.rows,
+        recentActivity: logsResult.rows,
       },
       services: [
         {
@@ -67,7 +88,7 @@ export async function GET() {
           id: "redis",
           name: "Redis",
           health: "unconfigured",
-          message: "Pendiente de conexión.",
+          message: "Pendiente de configuración.",
         },
       ],
     });

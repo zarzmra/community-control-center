@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { recordAuditLog } from "@/lib/audit";
 
 type Community = {
   id: string;
@@ -173,9 +174,17 @@ export async function PUT(
       );
     }
 
+    const updatedCommunity = result.rows[0];
+
+    await recordAuditLog(
+      "community_updated",
+      `Se actualizó la comunidad "${updatedCommunity.name}"`,
+      updatedCommunity.id,
+    );
+
     return NextResponse.json({
       ok: true,
-      data: result.rows[0],
+      data: updatedCommunity,
     });
   } catch {
     return NextResponse.json(
@@ -205,6 +214,14 @@ export async function DELETE(
       );
     }
 
+    // Get name before deleting for the log
+    const nameResult = await query<{ name: string }>(
+      "SELECT name FROM communities WHERE id = $1",
+      [id],
+    );
+
+    const communityName = nameResult.rows[0]?.name || id;
+
     const result = await query(
       `
         DELETE FROM communities
@@ -222,6 +239,11 @@ export async function DELETE(
         { status: 404 },
       );
     }
+
+    await recordAuditLog(
+      "community_deleted",
+      `Se eliminó la comunidad "${communityName}"`,
+    );
 
     return NextResponse.json({
       ok: true,

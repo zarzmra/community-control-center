@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { recordAuditLog } from "@/lib/audit";
 
 type Channel = {
   id: string;
@@ -84,9 +85,17 @@ export async function PUT(
       );
     }
 
+    const channel = result.rows[0];
+
+    await recordAuditLog(
+      "channel_updated",
+      `Se actualizó el canal "${channel.name}"`,
+      channel.community_id,
+    );
+
     return NextResponse.json({
       ok: true,
-      data: result.rows[0],
+      data: channel,
     });
   } catch {
     return NextResponse.json(
@@ -106,6 +115,14 @@ export async function DELETE(
   try {
     const { id } = await params;
 
+    // Get info before deleting for the log
+    const channelResult = await query<Channel>(
+      "SELECT name, community_id FROM channels WHERE id = $1",
+      [id],
+    );
+
+    const channelInfo = channelResult.rows[0];
+
     const result = await query(
       `
         DELETE FROM channels
@@ -121,6 +138,14 @@ export async function DELETE(
           error: "El canal no existe.",
         },
         { status: 404 },
+      );
+    }
+
+    if (channelInfo) {
+      await recordAuditLog(
+        "channel_deleted",
+        `Se eliminó el canal "${channelInfo.name}"`,
+        channelInfo.community_id,
       );
     }
 

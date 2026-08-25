@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { recordAuditLog } from "@/lib/audit";
 
 type Automation = {
   id: string;
@@ -82,9 +83,17 @@ export async function PUT(
       );
     }
 
+    const automation = result.rows[0];
+
+    await recordAuditLog(
+      "automation_updated",
+      `Se actualizó la automatización "${automation.name}"`,
+      automation.community_id,
+    );
+
     return NextResponse.json({
       ok: true,
-      data: result.rows[0],
+      data: automation,
     });
   } catch {
     return NextResponse.json(
@@ -104,6 +113,14 @@ export async function DELETE(
   try {
     const { id } = await params;
 
+    // Get info before deleting for the log
+    const automationResult = await query<Automation>(
+      "SELECT name, community_id FROM automations WHERE id = $1",
+      [id],
+    );
+
+    const automationInfo = automationResult.rows[0];
+
     const result = await query(
       `
         DELETE FROM automations
@@ -119,6 +136,14 @@ export async function DELETE(
           error: "La automatización no existe.",
         },
         { status: 404 },
+      );
+    }
+
+    if (automationInfo) {
+      await recordAuditLog(
+        "automation_deleted",
+        `Se eliminó la automatización "${automationInfo.name}"`,
+        automationInfo.community_id,
       );
     }
 

@@ -10,10 +10,19 @@ export type RecentCommunity = {
   channels: number;
 };
 
+export type AuditLog = {
+  id: string;
+  event_type: string;
+  details: string;
+  community_id: string | null;
+  created_at: string;
+};
+
 export type DashboardData = {
   metrics: readonly DashboardMetric[];
   services: readonly ServiceStatus[];
   recentCommunities: readonly RecentCommunity[];
+  recentActivity: readonly AuditLog[];
 };
 
 export type DashboardApiResponse = {
@@ -25,6 +34,7 @@ export type DashboardApiResponse = {
     messages: number | null;
     automations: number | null;
     recentCommunities: readonly RecentCommunity[];
+    recentActivity: readonly AuditLog[];
   };
   services: readonly ServiceStatus[];
 };

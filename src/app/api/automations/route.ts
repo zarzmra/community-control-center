@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { recordAuditLog } from "@/lib/audit";
 
 type Automation = {
   id: string;
@@ -92,10 +93,18 @@ export async function POST(request: Request) {
       [name, communityId, status, trigger],
     );
 
+    const automation = result.rows[0];
+
+    await recordAuditLog(
+      "automation_created",
+      `Se creó la automatización "${automation.name}"`,
+      automation.community_id,
+    );
+
     return NextResponse.json(
       {
         ok: true,
-        data: result.rows[0],
+        data: automation,
       },
       { status: 201 },
     );
