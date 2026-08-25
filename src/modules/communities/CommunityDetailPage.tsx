@@ -20,6 +20,29 @@ type Community = {
   channels: number;
 };
 
+type Bot = {
+  id: string;
+  name: string;
+  community_id: string;
+  status: "online" | "offline" | "error";
+};
+
+type Channel = {
+  id: string;
+  name: string;
+  type: "whatsapp" | "web" | "other";
+  status: "connected" | "disconnected" | "pending";
+  community_id: string;
+};
+
+type Automation = {
+  id: string;
+  name: string;
+  community_id: string;
+  status: "active" | "paused" | "draft";
+  trigger: string;
+};
+
 type CommunityDetailPageProps = {
   id: string;
 };
@@ -32,10 +55,14 @@ export function CommunityDetailPage({
   const [community, setCommunity] =
     useState<Community | null>(null);
 
+  const [bots, setBots] = useState<Bot[]>([]);
+  const [channels, setChannels] = useState<Channel[]>([]);
+  const [automations, setAutomations] =
+    useState<Automation[]>([]);
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-
   const [editing, setEditing] = useState(false);
 
   const [name, setName] = useState("");
@@ -47,38 +74,70 @@ export function CommunityDetailPage({
   useEffect(() => {
     let cancelled = false;
 
-    async function fetchCommunity() {
+    async function load() {
       try {
         setLoading(true);
         setError(null);
 
-        const response = await fetch(
-          `/api/communities/${id}`,
-        );
+        const [
+          communityResponse,
+          botsResponse,
+          channelsResponse,
+          automationsResponse,
+        ] = await Promise.all([
+          fetch(`/api/communities/${id}`),
+          fetch("/api/bots"),
+          fetch("/api/channels"),
+          fetch("/api/automations"),
+        ]);
 
-        const result: {
-          ok: boolean;
-          data?: Community;
-          error?: string;
-        } = await response.json();
+        const communityResult = await communityResponse.json();
+        const botsResult = await botsResponse.json();
+        const channelsResult = await channelsResponse.json();
+        const automationsResult =
+          await automationsResponse.json();
 
-        if (!response.ok) {
+        if (!communityResponse.ok) {
           throw new Error(
-            result.error ??
+            communityResult.error ??
               "No se pudo cargar la comunidad.",
           );
         }
 
-        if (!result.data) {
+        if (!communityResult.data) {
           throw new Error(
             "No se recibió información de la comunidad.",
           );
         }
 
         if (!cancelled) {
-          setCommunity(result.data);
-          setName(result.data.name);
-          setDescription(result.data.description);
+          setCommunity(communityResult.data);
+          setName(communityResult.data.name);
+          setDescription(
+            communityResult.data.description,
+          );
+
+          setBots(
+            (botsResult.data ?? []).filter(
+              (bot: Bot) =>
+                bot.community_id === id,
+            ),
+          );
+
+          setChannels(
+            (channelsResult.data ?? []).filter(
+              (channel: Channel) =>
+                channel.community_id === id,
+            ),
+          );
+
+          setAutomations(
+            (automationsResult.data ?? []).filter(
+              (automation: Automation) =>
+                automation.community_id === id,
+            ),
+          );
+
           setLoading(false);
         }
       } catch (err) {
@@ -93,7 +152,7 @@ export function CommunityDetailPage({
       }
     }
 
-    fetchCommunity();
+    load();
 
     return () => {
       cancelled = true;
@@ -126,22 +185,12 @@ export function CommunityDetailPage({
         },
       );
 
-      const result: {
-        ok: boolean;
-        data?: Community;
-        error?: string;
-      } = await response.json();
+      const result = await response.json();
 
       if (!response.ok) {
         throw new Error(
           result.error ??
             "No se pudo actualizar la comunidad.",
-        );
-      }
-
-      if (!result.data) {
-        throw new Error(
-          "No se recibió la comunidad actualizada.",
         );
       }
 
@@ -161,9 +210,7 @@ export function CommunityDetailPage({
   }
 
   function handleCancelEdit() {
-    if (!community) {
-      return;
-    }
+    if (!community) return;
 
     setName(community.name);
     setDescription(community.description);
@@ -172,17 +219,13 @@ export function CommunityDetailPage({
   }
 
   async function handleDelete() {
-    if (!community) {
-      return;
-    }
+    if (!community) return;
 
     const confirmed = window.confirm(
       `¿Seguro que quieres eliminar "${community.name}"?\n\nEsta acción no se puede deshacer.`,
     );
 
-    if (!confirmed) {
-      return;
-    }
+    if (!confirmed) return;
 
     setDeleting(true);
     setError(null);
@@ -201,10 +244,7 @@ export function CommunityDetailPage({
         },
       );
 
-      const result: {
-        ok: boolean;
-        error?: string;
-      } = await response.json();
+      const result = await response.json();
 
       if (!response.ok) {
         throw new Error(
@@ -231,7 +271,7 @@ export function CommunityDetailPage({
 
         <Card ariaLabel="Cargando detalles">
           <LoadingState
-            label="Consultando los detalles de la comunidad..."
+            label="Consultando comunidad y recursos..."
           />
         </Card>
       </PageBody>
@@ -247,9 +287,7 @@ export function CommunityDetailPage({
           <ErrorState
             title="Ocurrió un problema"
             description={error}
-            onRetry={() => {
-              setRetry((value) => !value);
-            }}
+            onRetry={() => setRetry((value) => !value)}
           />
 
           <div style={{ marginTop: "1rem" }}>
@@ -265,15 +303,13 @@ export function CommunityDetailPage({
     );
   }
 
-  if (!community) {
-    return null;
-  }
+  if (!community) return null;
 
   return (
     <PageBody>
       <PageHeader
         title={community.name}
-        description="Administra la información y configuración de esta comunidad."
+        description="Administra la información, bots, canales y automatizaciones de esta comunidad."
       />
 
       {error ? (
@@ -340,7 +376,7 @@ export function CommunityDetailPage({
                   flexWrap: "wrap",
                 }}
               >
-                <button
+                <Button
                   type="button"
                   onClick={handleSave}
                   disabled={saving}
@@ -348,7 +384,7 @@ export function CommunityDetailPage({
                   {saving
                     ? "Guardando..."
                     : "Guardar cambios"}
-                </button>
+                </Button>
 
                 <Button
                   type="button"
@@ -394,37 +430,20 @@ export function CommunityDetailPage({
                       "Sin descripción disponible."}
                   </p>
 
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: "0.5rem",
-                      alignItems: "center",
-                    }}
+                  <Badge
+                    variant={
+                      community.status === "active"
+                        ? "success"
+                        : "neutral"
+                    }
                   >
-                    <span
-                      style={{
-                        fontSize: "0.875rem",
-                        fontWeight: "500",
-                      }}
-                    >
-                      Estado:
-                    </span>
-
-                    <Badge
-                      variant={
-                        community.status === "active"
-                          ? "success"
-                          : "neutral"
-                      }
-                    >
-                      {community.status === "active"
-                        ? "Activo"
-                        : "Inactivo"}
-                    </Badge>
-                  </div>
+                    {community.status === "active"
+                      ? "Activo"
+                      : "Inactivo"}
+                  </Badge>
                 </div>
 
-                <button
+                <Button
                   type="button"
                   onClick={() => {
                     setError(null);
@@ -432,7 +451,7 @@ export function CommunityDetailPage({
                   }}
                 >
                   Editar
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -464,15 +483,7 @@ export function CommunityDetailPage({
                 {community.members}
               </span>
 
-              <span
-                style={{
-                  color:
-                    "var(--color-text-secondary, #666)",
-                  fontSize: "0.875rem",
-                }}
-              >
-                Miembros
-              </span>
+              <span>Miembros</span>
             </div>
           </Card>
 
@@ -493,15 +504,7 @@ export function CommunityDetailPage({
                 {community.bots}
               </span>
 
-              <span
-                style={{
-                  color:
-                    "var(--color-text-secondary, #666)",
-                  fontSize: "0.875rem",
-                }}
-              >
-                Bots conectados
-              </span>
+              <span>Bots conectados</span>
             </div>
           </Card>
 
@@ -522,18 +525,98 @@ export function CommunityDetailPage({
                 {community.channels}
               </span>
 
-              <span
-                style={{
-                  color:
-                    "var(--color-text-secondary, #666)",
-                  fontSize: "0.875rem",
-                }}
-              >
-                Canales
-              </span>
+              <span>Canales</span>
             </div>
           </Card>
         </section>
+
+        <Card ariaLabel="Bots de la comunidad">
+          <h2>Bots</h2>
+
+          {bots.length === 0 ? (
+            <p>No hay bots configurados.</p>
+          ) : (
+            <div>
+              {bots.map((bot) => (
+                <div key={bot.id}>
+                  <strong>{bot.name}</strong>{" "}
+                  <Badge
+                    variant={
+                      bot.status === "online"
+                        ? "success"
+                        : bot.status === "error"
+                          ? "danger"
+                          : "neutral"
+                    }
+                  >
+                    {bot.status}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Card ariaLabel="Canales de la comunidad">
+          <h2>Canales</h2>
+
+          {channels.length === 0 ? (
+            <p>No hay canales configurados.</p>
+          ) : (
+            <div>
+              {channels.map((channel) => (
+                <div key={channel.id}>
+                  <strong>{channel.name}</strong>{" "}
+                  <span>({channel.type})</span>{" "}
+                  <Badge
+                    variant={
+                      channel.status === "connected"
+                        ? "success"
+                        : channel.status === "pending"
+                          ? "warning"
+                          : "neutral"
+                    }
+                  >
+                    {channel.status}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Card ariaLabel="Automatizaciones de la comunidad">
+          <h2>Automatizaciones</h2>
+
+          {automations.length === 0 ? (
+            <p>No hay automatizaciones configuradas.</p>
+          ) : (
+            <div>
+              {automations.map((automation) => (
+                <div key={automation.id}>
+                  <strong>{automation.name}</strong>{" "}
+                  <Badge
+                    variant={
+                      automation.status === "active"
+                        ? "success"
+                        : automation.status === "paused"
+                          ? "warning"
+                          : "neutral"
+                    }
+                  >
+                    {automation.status}
+                  </Badge>
+
+                  {automation.trigger ? (
+                    <p>
+                      Disparador: {automation.trigger}
+                    </p>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
 
         <Card ariaLabel="Acciones de comunidad">
           <div
@@ -550,15 +633,16 @@ export function CommunityDetailPage({
               Volver a comunidades
             </Button>
 
-            <button
+            <Button
               type="button"
+              variant="secondary"
               onClick={handleDelete}
               disabled={deleting}
             >
               {deleting
                 ? "Eliminando..."
                 : "Eliminar comunidad"}
-            </button>
+            </Button>
           </div>
         </Card>
       </div>
