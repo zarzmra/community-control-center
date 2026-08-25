@@ -7,21 +7,45 @@ import { Card, CardHeader } from "@/components/ui/Card";
 import { PageBody, PageHeader } from "@/components/ui/PageHeader";
 import { MetricCard } from "@/modules/dashboard/components/MetricCard";
 import { ServiceStatusList } from "@/modules/dashboard/components/ServiceStatusList";
-import type { DashboardApiResponse, RecentCommunity } from "@/types/dashboard";
+import type {
+  DashboardApiResponse,
+  RecentCommunity,
+} from "@/types/dashboard";
 import type { DashboardMetric } from "@/types";
 import styles from "./DashboardPage.module.css";
 
 const METRIC_DEFINITIONS = [
-  { id: "communities", label: "Comunidades", key: "communities" },
-  { id: "active-bots", label: "Bots activos", key: "activeBots" },
-  { id: "users", label: "Usuarios", key: "users" },
-  { id: "messages", label: "Mensajes", key: "messages" },
-  { id: "automations", label: "Automatizaciones", key: "automations" },
+  {
+    id: "communities",
+    label: "Comunidades",
+    key: "communities",
+  },
+  {
+    id: "active-bots",
+    label: "Bots activos",
+    key: "activeBots",
+  },
+  {
+    id: "users",
+    label: "Usuarios",
+    key: "users",
+  },
+  {
+    id: "messages",
+    label: "Mensajes",
+    key: "messages",
+  },
+  {
+    id: "automations",
+    label: "Automatizaciones",
+    key: "automations",
+  },
 ] as const;
 
 export function DashboardPage() {
   const [dashboard, setDashboard] =
     useState<DashboardApiResponse | null>(null);
+
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -29,7 +53,9 @@ export function DashboardPage() {
 
     async function loadDashboard() {
       try {
-        const response = await fetch("/api/dashboard");
+        const response = await fetch("/api/dashboard", {
+          cache: "no-store",
+        });
 
         if (!response.ok) {
           throw new Error("No se pudo cargar el Dashboard.");
@@ -55,15 +81,14 @@ export function DashboardPage() {
     };
   }, []);
 
-  const metrics: readonly DashboardMetric[] =
-    dashboard?.data
-      ? METRIC_DEFINITIONS.map((metric) => ({
-          id: metric.id,
-          label: metric.label,
-          value: dashboard.data[metric.key],
-          isDemo: false,
-        }))
-      : [];
+  const metrics: readonly DashboardMetric[] = dashboard?.data
+    ? METRIC_DEFINITIONS.map((metric) => ({
+        id: metric.id,
+        label: metric.label,
+        value: dashboard.data[metric.key],
+        isDemo: false,
+      }))
+    : [];
 
   const recentCommunities: readonly RecentCommunity[] =
     dashboard?.data.recentCommunities ?? [];
@@ -80,13 +105,21 @@ export function DashboardPage() {
           <EmptyState
             title="No se pudo cargar el Dashboard"
             description={error}
+            actionLabel="Reintentar"
+            actionHref="/"
           />
         </Card>
       ) : null}
 
-      <section className={styles.metrics} aria-label="Métricas">
+      <section
+        className={styles.metrics}
+        aria-label="Métricas principales"
+      >
         {metrics.map((metric) => (
-          <MetricCard key={metric.id} metric={metric} />
+          <MetricCard
+            key={metric.id}
+            metric={metric}
+          />
         ))}
       </section>
 
@@ -94,19 +127,19 @@ export function DashboardPage() {
         <Card ariaLabel="Actividad reciente">
           <CardHeader
             title="Actividad reciente"
-            description="Los eventos del sistema aparecerán aquí cuando existan."
+            description="Eventos recientes del sistema."
           />
 
           <EmptyState
             title="Sin actividad"
-            description="No hay actividad reciente. Esta sección se llenará cuando el backend registre eventos."
+            description="Todavía no hay eventos registrados."
           />
         </Card>
 
         <Card ariaLabel="Estado de servicios">
           <CardHeader
             title="Estado de servicios"
-            description="Estado actual de los servicios configurados."
+            description="Estado actual de las conexiones configuradas."
           />
 
           <ServiceStatusList
@@ -118,14 +151,14 @@ export function DashboardPage() {
       <Card ariaLabel="Comunidades recientes">
         <CardHeader
           title="Comunidades recientes"
-          description="Las comunidades registradas en el sistema."
+          description="Las últimas comunidades registradas en el sistema."
         />
 
         {recentCommunities.length === 0 ? (
           <EmptyState
             title="Sin comunidades"
             description="Todavía no hay comunidades registradas."
-            actionLabel="Ver comunidades"
+            actionLabel="Crear comunidad"
             actionHref="/communities"
           />
         ) : (
@@ -140,7 +173,9 @@ export function DashboardPage() {
 
                   {community.description ? (
                     <p>{community.description}</p>
-                  ) : null}
+                  ) : (
+                    <p>Sin descripción.</p>
+                  )}
 
                   <p>
                     {community.members} miembros ·{" "}
