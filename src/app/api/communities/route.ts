@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { query } from "@/lib/db";
 
 type Community = {
   id: string;
@@ -11,31 +11,9 @@ type Community = {
   channels: number;
 };
 
-type CommunityRow = {
-  id: string;
-  name: string;
-  description: string;
-  status: "active" | "inactive";
-  members: number;
-  bots: number;
-  channels: number;
-};
-
-function mapCommunity(row: CommunityRow): Community {
-  return {
-    id: row.id,
-    name: row.name,
-    description: row.description,
-    status: row.status,
-    members: row.members,
-    bots: row.bots,
-    channels: row.channels,
-  };
-}
-
 export async function GET() {
   try {
-    const result = await db.query<CommunityRow>(
+    const result = await query<Community>(
       `
         SELECT
           id,
@@ -52,15 +30,13 @@ export async function GET() {
 
     return NextResponse.json({
       ok: true,
-      data: result.rows.map(mapCommunity),
+      data: result.rows,
     });
-  } catch (error) {
-    console.error("Error al obtener comunidades:", error);
-
+  } catch {
     return NextResponse.json(
       {
         ok: false,
-        error: "No se pudieron obtener las comunidades.",
+        error: "No se pudieron cargar las comunidades.",
       },
       { status: 500 },
     );
@@ -89,9 +65,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const id = crypto.randomUUID();
-
-    const result = await db.query<CommunityRow>(
+    const result = await query<Community>(
       `
         INSERT INTO communities (
           id,
@@ -102,7 +76,15 @@ export async function POST(request: Request) {
           bots,
           channels
         )
-        VALUES ($1, $2, $3, 'active', 0, 0, 0)
+        VALUES (
+          gen_random_uuid(),
+          $1,
+          $2,
+          'active',
+          0,
+          0,
+          0
+        )
         RETURNING
           id,
           name,
@@ -112,25 +94,73 @@ export async function POST(request: Request) {
           bots,
           channels
       `,
-      [id, name, description],
+      [name, description],
     );
-
-    const community = mapCommunity(result.rows[0]);
 
     return NextResponse.json(
       {
         ok: true,
-        data: community,
+        data: result.rows[0],
       },
       { status: 201 },
     );
-  } catch (error) {
-    console.error("Error al crear comunidad:", error);
-
+  } catch {
     return NextResponse.json(
       {
         ok: false,
         error: "No se pudo crear la comunidad.",
+      },
+      { status: 500 },
+    );
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const body = await request.json();
+
+    const id =
+      typeof body.id === "string" ? body.id.trim() : "";
+
+    if (!id) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "El ID de la comunidad es obligatorio.",
+        },
+        { status: 400 },
+      );
+    }
+
+    const result = await query(
+      `
+        DELETE FROM communities
+        WHERE id = $1
+      `,
+      [id],
+    );
+
+    if (result.rowCount === 0) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "La comunidad no existe.",
+        },
+        { status: 404 },
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      data: {
+        id,
+      },
+    });
+  } catch {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "No se pudo eliminar la comunidad.",
       },
       { status: 500 },
     );

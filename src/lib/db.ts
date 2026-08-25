@@ -1,21 +1,24 @@
-import { Pool } from "pg";
+import { Pool, type QueryResultRow } from "pg";
 
-const connectionString = process.env.DATABASE_URL;
+const globalForDb = globalThis as unknown as {
+  pool: Pool | undefined;
+};
 
-if (!connectionString) {
-  throw new Error("DATABASE_URL no está configurada.");
-}
-
-declare global {
-  var postgresPool: Pool | undefined;
-}
-
-export const db =
-  global.postgresPool ??
+const pool =
+  globalForDb.pool ??
   new Pool({
-    connectionString,
+    connectionString: process.env.DATABASE_URL,
   });
 
 if (process.env.NODE_ENV !== "production") {
-  global.postgresPool = db;
+  globalForDb.pool = pool;
 }
+
+export async function query<T extends QueryResultRow = QueryResultRow>(
+  text: string,
+  values?: unknown[],
+) {
+  return pool.query<T>(text, values);
+}
+
+export default pool;
