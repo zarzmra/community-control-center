@@ -35,15 +35,25 @@ export async function GET(
     const result = await query<Community>(
       `
         SELECT
-          id,
-          name,
-          description,
-          status,
-          members,
-          bots,
-          channels
-        FROM communities
-        WHERE id = $1
+          c.id,
+          c.name,
+          c.description,
+          c.status,
+          c.members,
+          COUNT(DISTINCT b.id)::int AS bots,
+          COUNT(DISTINCT ch.id)::int AS channels
+        FROM communities c
+        LEFT JOIN bots b
+          ON b.community_id = c.id
+        LEFT JOIN channels ch
+          ON ch.community_id = c.id
+        WHERE c.id = $1
+        GROUP BY
+          c.id,
+          c.name,
+          c.description,
+          c.status,
+          c.members
         LIMIT 1
       `,
       [id],
@@ -118,7 +128,8 @@ export async function PUT(
         UPDATE communities
         SET
           name = $1,
-          description = $2
+          description = $2,
+          updated_at = now()
         WHERE id = $3
         RETURNING
           id,
