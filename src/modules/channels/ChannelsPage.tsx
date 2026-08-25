@@ -23,11 +23,14 @@ type Community = {
 export function ChannelsPage() {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [communities, setCommunities] = useState<Community[]>([]);
+
   const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const [name, setName] = useState("");
   const [type, setType] = useState<Channel["type"]>("other");
@@ -93,7 +96,32 @@ export function ChannelsPage() {
     return () => window.clearTimeout(timer);
   }, []);
 
-  async function handleCreate(event: FormEvent<HTMLFormElement>) {
+  function resetForm() {
+    setName("");
+    setType("other");
+    setStatus("pending");
+
+    if (communities.length > 0) {
+      setCommunityId(communities[0].id);
+    } else {
+      setCommunityId("");
+    }
+
+    setEditingId(null);
+    setShowForm(false);
+  }
+
+  function startEdit(channel: Channel) {
+    setName(channel.name);
+    setType(channel.type);
+    setStatus(channel.status);
+    setCommunityId(channel.community_id);
+    setEditingId(channel.id);
+    setShowForm(true);
+    setError(null);
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!name.trim()) {
@@ -106,45 +134,51 @@ export function ChannelsPage() {
       return;
     }
 
-    setCreating(true);
+    setSaving(true);
     setError(null);
 
     try {
-      const response = await fetch("/api/channels", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      const isEditing = Boolean(editingId);
+
+      const response = await fetch(
+        isEditing
+          ? `/api/channels/${editingId}`
+          : "/api/channels",
+        {
+          method: isEditing ? "PUT" : "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: name.trim(),
+            type,
+            status,
+            communityId,
+          }),
         },
-        body: JSON.stringify({
-          name: name.trim(),
-          type,
-          status,
-          communityId,
-        }),
-      });
+      );
 
       const result = await response.json();
 
       if (!response.ok) {
         throw new Error(
-          result.error ?? "No se pudo crear el canal.",
+          result.error ??
+            (isEditing
+              ? "No se pudo actualizar el canal."
+              : "No se pudo crear el canal."),
         );
       }
 
-      setName("");
-      setType("other");
-      setStatus("pending");
-      setShowForm(false);
-
+      resetForm();
       await loadChannels();
     } catch (err) {
       setError(
         err instanceof Error
           ? err.message
-          : "No se pudo crear el canal.",
+          : "No se pudo guardar el canal.",
       );
     } finally {
-      setCreating(false);
+      setSaving(false);
     }
   }
 
@@ -179,6 +213,10 @@ export function ChannelsPage() {
       setChannels((current) =>
         current.filter((item) => item.id !== channel.id),
       );
+
+      if (editingId === channel.id) {
+        resetForm();
+      }
     } catch (err) {
       setError(
         err instanceof Error
@@ -233,31 +271,56 @@ export function ChannelsPage() {
       >
         <Button
           type="button"
-          onClick={() => setShowForm((visible) => !visible)}
+          onClick={() => {
+            if (showForm) {
+              resetForm();
+            } else {
+              setShowForm(true);
+            }
+          }}
         >
-          {showForm ? "Cancelar" : "Crear canal"}
+          {showForm
+            ? "Cancelar"
+            : "Crear canal"}
         </Button>
       </div>
 
       {showForm ? (
-        <Card ariaLabel="Crear canal">
+        <Card
+          ariaLabel={
+            editingId
+              ? "Editar canal"
+              : "Crear canal"
+          }
+        >
           <form
-            onSubmit={handleCreate}
+            onSubmit={handleSubmit}
             style={{
               display: "grid",
               gap: "1rem",
             }}
           >
+            <h2>
+              {editingId
+                ? "Editar canal"
+                : "Crear canal"}
+            </h2>
+
             <div>
-              <label htmlFor="channel-name">Nombre</label>
+              <label htmlFor="channel-name">
+                Nombre
+              </label>
 
               <input
                 id="channel-name"
                 type="text"
                 value={name}
-                onChange={(event) => setName(event.target.value)}
+                onChange={(event) =>
+                  setName(event.target.value)
+                }
                 placeholder="Ej. WhatsApp principal"
                 required
+                disabled={saving}
               />
             </div>
 
@@ -273,6 +336,7 @@ export function ChannelsPage() {
                   setCommunityId(event.target.value)
                 }
                 required
+                disabled={saving}
               >
                 <option value="">
                   Selecciona una comunidad
@@ -290,7 +354,9 @@ export function ChannelsPage() {
             </div>
 
             <div>
-              <label htmlFor="channel-type">Tipo</label>
+              <label htmlFor="channel-type">
+                Tipo
+              </label>
 
               <select
                 id="channel-type"
@@ -300,8 +366,11 @@ export function ChannelsPage() {
                     event.target.value as Channel["type"],
                   )
                 }
+                disabled={saving}
               >
-                <option value="whatsapp">WhatsApp</option>
+                <option value="whatsapp">
+                  WhatsApp
+                </option>
                 <option value="web">Web</option>
                 <option value="other">Otro</option>
               </select>
@@ -320,18 +389,49 @@ export function ChannelsPage() {
                     event.target.value as Channel["status"],
                   )
                 }
+                disabled={saving}
               >
-                <option value="pending">Pendiente</option>
-                <option value="connected">Conectado</option>
+                <option value="pending">
+                  Pendiente
+                </option>
+                <option value="connected">
+                  Conectado
+                </option>
                 <option value="disconnected">
                   Desconectado
                 </option>
               </select>
             </div>
 
-            <Button type="submit" disabled={creating}>
-              {creating ? "Creando..." : "Crear canal"}
-            </Button>
+            <div
+              style={{
+                display: "flex",
+                gap: "0.75rem",
+                flexWrap: "wrap",
+              }}
+            >
+              <Button
+                type="submit"
+                disabled={saving}
+              >
+                {saving
+                  ? "Guardando..."
+                  : editingId
+                    ? "Guardar cambios"
+                    : "Crear canal"}
+              </Button>
+
+              {editingId ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={resetForm}
+                  disabled={saving}
+                >
+                  Cancelar edición
+                </Button>
+              ) : null}
+            </div>
           </form>
         </Card>
       ) : null}
@@ -354,7 +454,9 @@ export function ChannelsPage() {
         </Card>
       ) : null}
 
-      {!loading && !error && channels.length === 0 ? (
+      {!loading &&
+      !error &&
+      channels.length === 0 ? (
         <Card ariaLabel="Sin canales">
           <EmptyState
             title="Aún no hay canales"
@@ -372,7 +474,10 @@ export function ChannelsPage() {
           }}
         >
           {channels.map((channel) => (
-            <Card key={channel.id} ariaLabel={channel.name}>
+            <Card
+              key={channel.id}
+              ariaLabel={channel.name}
+            >
               <div
                 style={{
                   display: "flex",
@@ -387,29 +492,59 @@ export function ChannelsPage() {
 
                   <p>
                     Comunidad:{" "}
-                    {getCommunityName(channel.community_id)}
+                    {getCommunityName(
+                      channel.community_id,
+                    )}
                   </p>
 
                   <p>
-                    Tipo: {getTypeLabel(channel.type)}
+                    Tipo:{" "}
+                    {getTypeLabel(channel.type)}
                   </p>
 
                   <Badge
-                    variant={getStatusVariant(channel.status)}
+                    variant={getStatusVariant(
+                      channel.status,
+                    )}
                   >
-                    {getStatusLabel(channel.status)}
+                    {getStatusLabel(
+                      channel.status,
+                    )}
                   </Badge>
                 </div>
 
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => handleDelete(channel)}
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "0.5rem",
+                    flexWrap: "wrap",
+                  }}
                 >
-                  {deletingId === channel.id
-                    ? "Eliminando..."
-                    : "Eliminar"}
-                </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() =>
+                      startEdit(channel)
+                    }
+                  >
+                    Editar
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() =>
+                      handleDelete(channel)
+                    }
+                    disabled={
+                      deletingId === channel.id
+                    }
+                  >
+                    {deletingId === channel.id
+                      ? "Eliminando..."
+                      : "Eliminar"}
+                  </Button>
+                </div>
               </div>
             </Card>
           ))}
