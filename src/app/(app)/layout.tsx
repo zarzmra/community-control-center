@@ -2,7 +2,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 
-export default function AppGroupLayout({
+export default async function AppGroupLayout({
   children,
 }: {
   children: React.ReactNode;
