@@ -5,10 +5,13 @@
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
-    NEW.updated_at = NOW();
+    -- Check if the updated_at column exists in the table
+    IF TG_OP = 'UPDATE' OR TG_OP = 'INSERT' THEN
+        NEW.updated_at = NOW();
+    END IF;
     RETURN NEW;
 END;
-$$ language 'plpgsql';
+$$ LANGUAGE plpgsql;
 
 -- Drop existing triggers if they exist and recreate them
 DROP TRIGGER IF EXISTS update_communities_updated_at ON communities;
