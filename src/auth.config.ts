@@ -1,5 +1,6 @@
 import type { NextAuthConfig } from "next-auth";
 import type { JWT } from "next-auth/jwt";
+import type { User } from "next-auth";
 
 declare module "next-auth/jwt" {
   interface JWT {
@@ -8,9 +9,11 @@ declare module "next-auth/jwt" {
   }
 }
 
-interface UserFromToken extends JWT {
-  id: string;
-  role: "admin" | "member";
+declare module "next-auth" {
+  interface User {
+    id?: string;
+    role?: "admin" | "member";
+  }
 }
 
 const authConfig = {
@@ -21,12 +24,12 @@ const authConfig = {
     strategy: "jwt",
   },
   callbacks: {
-    jwt({ token, user }: { token: JWT; user: Partial<UserFromToken> }) {
+    jwt({ token, user }: { token: JWT; user?: User }) {
       if (user?.id) {
         token.id = user.id;
       }
       if (user?.role) {
-        token.role = user.role;
+        token.role = user.role as "admin" | "member";
       }
 
       return token;
