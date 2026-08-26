@@ -2,20 +2,6 @@ import type { NextAuthConfig } from "next-auth";
 import type { JWT } from "next-auth/jwt";
 import type { User } from "next-auth";
 
-declare module "next-auth/jwt" {
-  interface JWT {
-    id?: string;
-    role?: "admin" | "member";
-  }
-}
-
-declare module "next-auth" {
-  interface User {
-    id?: string;
-    role?: "admin" | "member";
-  }
-}
-
 const authConfig = {
   pages: {
     signIn: "/login",

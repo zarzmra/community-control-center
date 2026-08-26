@@ -20,7 +20,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: "Correo electrónico", type: "email" },
         password: { label: "Contraseña", type: "password" },
       },
-      async authorize(credentials) {
+      authorize: async (credentials) => {
         const email = typeof credentials?.email === "string"
           ? credentials.email.trim().toLowerCase()
           : "";

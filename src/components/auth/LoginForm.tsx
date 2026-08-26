@@ -2,11 +2,13 @@
 
 import { FormEvent, useState } from "react";
 import { signIn } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import styles from "./LoginForm.module.css";
 
 export function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const router = useRouter();
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -27,8 +29,9 @@ export function LoginForm() {
         return;
       }
 
-      // Redirigir al dashboard
-      window.location.assign("/");
+      // Redirigir al dashboard usando el router de Next.js
+      router.push("/");
+      router.refresh();
     } catch (err) {
       setError("Error al iniciar sesión. Inténtalo de nuevo.");
       setPending(false);
