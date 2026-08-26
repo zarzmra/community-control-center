@@ -10,51 +10,23 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
--- Triggers for all tables with updated_at
-DO $$ 
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.triggers 
-    WHERE trigger_name = 'update_communities_updated_at'
-  ) THEN
-    CREATE TRIGGER update_communities_updated_at 
-    BEFORE UPDATE ON communities 
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-  END IF;
-END $$;
+-- Drop existing triggers if they exist and recreate them
+DROP TRIGGER IF EXISTS update_communities_updated_at ON communities;
+CREATE TRIGGER update_communities_updated_at 
+BEFORE UPDATE ON communities 
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-DO $$ 
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.triggers 
-    WHERE trigger_name = 'update_bots_updated_at'
-  ) THEN
-    CREATE TRIGGER update_bots_updated_at 
-    BEFORE UPDATE ON bots 
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-  END IF;
-END $$;
+DROP TRIGGER IF EXISTS update_bots_updated_at ON bots;
+CREATE TRIGGER update_bots_updated_at 
+BEFORE UPDATE ON bots 
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-DO $$ 
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.triggers 
-    WHERE trigger_name = 'update_channels_updated_at'
-  ) THEN
-    CREATE TRIGGER update_channels_updated_at 
-    BEFORE UPDATE ON channels 
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-  END IF;
-END $$;
+DROP TRIGGER IF EXISTS update_channels_updated_at ON channels;
+CREATE TRIGGER update_channels_updated_at 
+BEFORE UPDATE ON channels 
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-DO $$ 
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.triggers 
-    WHERE trigger_name = 'update_automations_updated_at'
-  ) THEN
-    CREATE TRIGGER update_automations_updated_at 
-    BEFORE UPDATE ON automations 
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-  END IF;
-END $$;
+DROP TRIGGER IF EXISTS update_automations_updated_at ON automations;
+CREATE TRIGGER update_automations_updated_at 
+BEFORE UPDATE ON automations 
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
