@@ -14,10 +14,11 @@ export function MetricCard({ metric }: MetricCardProps) {
     <Card className={styles.metric} as="article" ariaLabel={metric.label}>
       <p className={styles.label}>{metric.label}</p>
       <p className={styles.value}>{displayValue}</p>
-      <div className={styles.meta}>
-        <Badge variant="neutral">Sin datos</Badge>
-        {metric.isDemo ? <Badge variant="demo">Demo</Badge> : null}
-      </div>
+      {metric.isDemo ? (
+        <div className={styles.meta}>
+          <Badge variant="demo">Demo</Badge>
+        </div>
+      ) : null}
     </Card>
   );
 }

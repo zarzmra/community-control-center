@@ -34,15 +34,18 @@ export async function GET() {
 
     const communitiesResult = await query<RecentCommunity>(`
       SELECT
-        id,
-        name,
-        description,
-        status,
-        members,
-        bots,
-        channels
-      FROM communities
-      ORDER BY created_at DESC
+        c.id,
+        c.name,
+        c.description,
+        c.status,
+        c.members,
+        COUNT(DISTINCT b.id)::int AS bots,
+        COUNT(DISTINCT ch.id)::int AS channels
+      FROM communities c
+      LEFT JOIN bots b ON b.community_id = c.id
+      LEFT JOIN channels ch ON ch.community_id = c.id
+      GROUP BY c.id, c.name, c.description, c.status, c.members, c.created_at
+      ORDER BY c.created_at DESC
       LIMIT 5
     `);
 

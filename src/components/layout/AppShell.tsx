@@ -11,9 +11,15 @@ const DESKTOP_QUERY = "(min-width: 768px)";
 
 type AppShellProps = {
   children: React.ReactNode;
+  user: {
+    id: string;
+    name?: string | null;
+    email?: string | null;
+    role: "admin" | "member";
+  };
 };
 
-export function AppShell({ children }: AppShellProps) {
+export function AppShell({ children, user }: AppShellProps) {
   const pathname = usePathname();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
@@ -102,6 +108,7 @@ export function AppShell({ children }: AppShellProps) {
       <div className={styles.body}>
         <Topbar
           pathname={pathname}
+          user={user}
           menuOpen={mobileNavOpen}
           onMenuToggle={() => setMobileNavOpen((open) => !open)}
           menuButtonRef={menuButtonRef}

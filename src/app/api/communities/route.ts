@@ -17,15 +17,18 @@ export async function GET() {
     const result = await query<Community>(
       `
         SELECT
-          id,
-          name,
-          description,
-          status,
-          members,
-          bots,
-          channels
-        FROM communities
-        ORDER BY created_at DESC
+          c.id,
+          c.name,
+          c.description,
+          c.status,
+          c.members,
+          COUNT(DISTINCT b.id)::int AS bots,
+          COUNT(DISTINCT ch.id)::int AS channels
+        FROM communities c
+        LEFT JOIN bots b ON b.community_id = c.id
+        LEFT JOIN channels ch ON ch.community_id = c.id
+        GROUP BY c.id, c.name, c.description, c.status, c.members, c.created_at
+        ORDER BY c.created_at DESC
       `,
     );
 
@@ -73,17 +76,13 @@ export async function POST(request: Request) {
           name,
           description,
           status,
-          members,
-          bots,
-          channels
+          members
         )
         VALUES (
           gen_random_uuid(),
           $1,
           $2,
           'active',
-          0,
-          0,
           0
         )
         RETURNING
@@ -92,8 +91,8 @@ export async function POST(request: Request) {
           description,
           status,
           members,
-          bots,
-          channels
+          0::int AS bots,
+          0::int AS channels
       `,
       [name, description],
     );

@@ -92,6 +92,7 @@ export function DashboardPage() {
 
   const recentCommunities: readonly RecentCommunity[] =
     dashboard?.data.recentCommunities ?? [];
+  const recentActivity = dashboard?.data.recentActivity ?? [];
 
   return (
     <PageBody>
@@ -130,10 +131,26 @@ export function DashboardPage() {
             description="Eventos recientes del sistema."
           />
 
-          <EmptyState
-            title="Sin actividad"
-            description="Todavía no hay eventos registrados."
-          />
+          {recentActivity.length === 0 ? (
+            <EmptyState
+              title="Sin actividad"
+              description="Todavía no hay eventos registrados."
+            />
+          ) : (
+            <ul className={styles.activityList}>
+              {recentActivity.map((event) => (
+                <li key={event.id} className={styles.activityItem}>
+                  <p>{event.details}</p>
+                  <time dateTime={event.created_at}>
+                    {new Intl.DateTimeFormat("es-MX", {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    }).format(new Date(event.created_at))}
+                  </time>
+                </li>
+              ))}
+            </ul>
+          )}
         </Card>
 
         <Card ariaLabel="Estado de servicios">

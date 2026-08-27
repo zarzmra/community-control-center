@@ -10,6 +10,35 @@
   gap: var(--space-4);
 }
 
+.activityList {
+  display: grid;
+  gap: 0.875rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.activityItem {
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 0.875rem;
+}
+
+.activityItem:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.activityItem p {
+  margin: 0;
+}
+
+.activityItem time {
+  color: var(--color-text-muted);
+  display: block;
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+}
+
 @media (min-width: 640px) {
   .metrics {
     grid-template-columns: repeat(2, 1fr);

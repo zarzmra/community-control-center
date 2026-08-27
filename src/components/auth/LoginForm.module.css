@@ -1,0 +1,6 @@
+.form { display: grid; gap: var(--space-2); margin-top: var(--space-6); }
+.form label { font-weight: 650; }
+.form input { border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); padding: .7rem .8rem; }
+.form button { border: 0; border-radius: var(--radius-md); background: var(--color-accent); color: white; cursor: pointer; font-weight: 700; margin-top: var(--space-3); padding: .75rem; }
+.form button:disabled { cursor: wait; opacity: .7; }
+.error { color: var(--color-danger); font-size: .9rem; }

@@ -137,8 +137,8 @@ export async function PUT(
             description,
             status,
             members,
-            bots,
-            channels
+            (SELECT COUNT(*)::int FROM bots WHERE community_id = communities.id) AS bots,
+            (SELECT COUNT(*)::int FROM channels WHERE community_id = communities.id) AS channels
         `,
         [name, description, status, id],
       );
@@ -157,8 +157,8 @@ export async function PUT(
             description,
             status,
             members,
-            bots,
-            channels
+            (SELECT COUNT(*)::int FROM bots WHERE community_id = communities.id) AS bots,
+            (SELECT COUNT(*)::int FROM channels WHERE community_id = communities.id) AS channels
         `,
         [name, description, id],
       );

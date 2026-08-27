@@ -95,6 +95,14 @@
   font-size: 0.72rem;
 }
 
+.signOut {
+  border: 0;
+  background: transparent;
+  color: var(--color-accent);
+  cursor: pointer;
+  font-weight: 650;
+}
+
 @media (min-width: 640px) {
   .status {
     display: inline-flex;
