@@ -10,7 +10,7 @@ import {
   requireString,
   requireUuid,
 } from "@/lib/api";
-import { requireAdmin } from "@/lib/authorization";
+import { requireCommunityAdmin, requireSession } from "@/lib/authorization";
 
 type Automation = {
   id: string;
@@ -22,7 +22,7 @@ type Automation = {
 
 export async function GET(request: Request) {
   try {
-    await requireAdmin();
+    const context = await requireSession();
     const { limit, offset, page } = parsePagination(request);
     const communityId = new URL(request.url).searchParams.get("communityId");
     if (communityId) requireUuid(communityId, "El ID de la comunidad");
@@ -36,10 +36,14 @@ export async function GET(request: Request) {
           trigger
         FROM automations
         WHERE ($3::uuid IS NULL OR community_id = $3)
+          AND ($4 = 'admin' OR EXISTS (
+            SELECT 1 FROM community_memberships cm
+            WHERE cm.community_id = automations.community_id AND cm.user_id = $5
+          ))
         ORDER BY created_at DESC
         LIMIT $1 OFFSET $2
       `,
-      [limit, offset, communityId],
+      [limit, offset, communityId, context.role, context.userId],
     );
 
     return NextResponse.json({
@@ -54,7 +58,6 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const session = await requireAdmin();
     const body = await readJsonBody<{
       name: unknown;
       communityId: unknown;
@@ -63,6 +66,7 @@ export async function POST(request: Request) {
     }>(request);
     const name = requireString(body.name, "El nombre", { max: 200 });
     const communityId = requireUuid(body.communityId, "El ID de la comunidad");
+    const session = await requireCommunityAdmin(communityId);
     const trigger =
       body.trigger === undefined
         ? ""
@@ -105,7 +109,7 @@ export async function POST(request: Request) {
       "automation_created",
       `Se creó la automatización "${automation.name}"`,
       automation.community_id,
-      { userId: session.user.id, entityType: "automation", entityId: automation.id },
+      { userId: session.userId, entityType: "automation", entityId: automation.id },
     );
 
     return NextResponse.json(

@@ -1,4 +1,24 @@
 export type CommunityStatus = "active" | "inactive";
+export type GlobalRole = "admin" | "member";
+export type CommunityRole = "admin" | "member";
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: GlobalRole;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CommunityMembership {
+  id: string;
+  community_id: string;
+  user_id: string;
+  role: CommunityRole;
+  created_at: string;
+  updated_at: string;
+}
 
 export interface Community {
   id: string;

@@ -9,7 +9,7 @@ import {
   requireString,
   requireUuid,
 } from "@/lib/api";
-import { requireCommunityAdmin } from "@/lib/authorization";
+import { requireAdmin, requireCommunityAdmin, requireSession } from "@/lib/authorization";
 
 type Community = {
   id: string;
@@ -23,7 +23,7 @@ type Community = {
 
 export async function GET(request: Request) {
   try {
-    await requireCommunityAdmin();
+    const context = await requireSession();
     const { limit, offset, page } = parsePagination(request);
     const result = await query<Community>(
       `
@@ -38,11 +38,16 @@ export async function GET(request: Request) {
         FROM communities c
         LEFT JOIN bots b ON b.community_id = c.id
         LEFT JOIN channels ch ON ch.community_id = c.id
+        WHERE $3 = 'admin'
+           OR EXISTS (
+             SELECT 1 FROM community_memberships cm
+             WHERE cm.community_id = c.id AND cm.user_id = $4
+           )
         GROUP BY c.id, c.name, c.description, c.status, c.members, c.created_at
         ORDER BY c.created_at DESC
         LIMIT $1 OFFSET $2
       `,
-      [limit, offset],
+      [limit, offset, context.role, context.userId],
     );
 
     return NextResponse.json({
@@ -57,7 +62,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const session = await requireCommunityAdmin();
+    const session = await requireAdmin();
     const body = await readJsonBody<{ name: unknown; description?: unknown }>(request);
     const name = requireString(body.name, "El nombre", { max: 200 });
     const description =
@@ -99,7 +104,7 @@ export async function POST(request: Request) {
       "community_created",
       `Se creó la comunidad "${community.name}"`,
       community.id,
-      { userId: session.user.id, entityType: "community", entityId: community.id },
+      { userId: session.userId, entityType: "community", entityId: community.id },
     );
 
     return NextResponse.json(
@@ -116,9 +121,9 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const session = await requireCommunityAdmin();
     const body = await readJsonBody<{ id: unknown }>(request);
     const id = requireUuid(body.id, "El ID de la comunidad");
+    const session = await requireCommunityAdmin(id);
 
     // Get name before deleting for the log
     await withTransaction(async (client) => {
@@ -136,7 +141,7 @@ export async function DELETE(request: Request) {
         "community_deleted",
         `Se eliminó la comunidad "${communityName}"`,
         undefined,
-        { userId: session.user.id, entityType: "community", entityId: id, client },
+        { userId: session.userId, entityType: "community", entityId: id, client },
       );
     });
 

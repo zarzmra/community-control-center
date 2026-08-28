@@ -10,7 +10,7 @@ import {
   requireString,
   requireUuid,
 } from "@/lib/api";
-import { requireAdmin } from "@/lib/authorization";
+import { requireCommunityAdmin, requireSession } from "@/lib/authorization";
 
 type Bot = {
   id: string;
@@ -22,7 +22,7 @@ type Bot = {
 
 export async function GET(request: Request) {
   try {
-    await requireAdmin();
+    const context = await requireSession();
     const { limit, offset, page } = parsePagination(request);
     const communityId = new URL(request.url).searchParams.get("communityId");
     if (communityId) requireUuid(communityId, "El ID de la comunidad");
@@ -31,9 +31,13 @@ export async function GET(request: Request) {
       `SELECT id, name, community_id, status, created_at
        FROM bots
        WHERE ($3::uuid IS NULL OR community_id = $3)
+         AND ($4 = 'admin' OR EXISTS (
+           SELECT 1 FROM community_memberships cm
+           WHERE cm.community_id = bots.community_id AND cm.user_id = $5
+         ))
        ORDER BY created_at DESC
        LIMIT $1 OFFSET $2`,
-      [limit, offset, communityId],
+      [limit, offset, communityId, context.role, context.userId],
     );
 
     return NextResponse.json({
@@ -48,7 +52,6 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const session = await requireAdmin();
     const body = await readJsonBody<{
       name: unknown;
       communityId: unknown;
@@ -56,6 +59,7 @@ export async function POST(request: Request) {
     }>(request);
     const name = requireString(body.name, "El nombre", { max: 200 });
     const communityId = requireUuid(body.communityId, "El ID de la comunidad");
+    const session = await requireCommunityAdmin(communityId);
     const status =
       body.status === undefined
         ? "offline"
@@ -85,7 +89,7 @@ export async function POST(request: Request) {
       "bot_created",
       `Se creó el bot "${bot.name}"`,
       bot.community_id,
-      { userId: session.user.id, entityType: "bot", entityId: bot.id },
+      { userId: session.userId, entityType: "bot", entityId: bot.id },
     );
 
     return NextResponse.json({ ok: true, data: bot }, { status: 201 });

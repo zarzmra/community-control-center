@@ -31,7 +31,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!email || !password) return null;
 
         const result = await query<AuthUser>(
-          `SELECT id, name, email, password_hash, role FROM users WHERE email = $1 LIMIT 1`,
+          `SELECT id, name, email, password_hash, role
+           FROM users
+           WHERE email = $1
+           LIMIT 1`,
           [email],
         );
         const user = result.rows[0];

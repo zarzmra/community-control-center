@@ -26,17 +26,6 @@ export default auth((request) => {
     return NextResponse.redirect(new URL("/", request.url));
   }
 
-  if (
-    isApi &&
-    request.method !== "GET" &&
-    request.auth?.user?.role !== "admin"
-  ) {
-    return Response.json(
-      { ok: false, error: "No tienes permisos para modificar recursos." },
-      { status: 403 },
-    );
-  }
-
   return NextResponse.next();
 });
 

@@ -13,7 +13,13 @@ export type AuditEventType =
   | "bot_deleted"
   | "automation_created"
   | "automation_updated"
-  | "automation_deleted";
+  | "automation_deleted"
+  | "user_created"
+  | "user_updated"
+  | "user_deleted"
+  | "membership_created"
+  | "membership_updated"
+  | "membership_deleted";
 
 /**
  * Records an event in the audit_logs table.

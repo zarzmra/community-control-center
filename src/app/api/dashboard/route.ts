@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { apiErrorResponse } from "@/lib/api";
-import { requireAdmin } from "@/lib/authorization";
+import { requireSession } from "@/lib/authorization";
 
 type RecentCommunity = {
   id: string;
@@ -23,17 +23,29 @@ type AuditLog = {
 
 export async function GET() {
   try {
-    await requireAdmin();
+    const context = await requireSession();
     const statsResult = await query<{
       communities: number;
       active_bots: number;
       automations: number;
     }>(`
       SELECT
-        (SELECT COUNT(*)::int FROM communities) AS communities,
-        (SELECT COUNT(*)::int FROM bots WHERE status = 'online') AS active_bots,
-        (SELECT COUNT(*)::int FROM automations WHERE status = 'active') AS automations
-    `);
+        (SELECT COUNT(*)::int FROM communities c
+         WHERE $1 = 'admin' OR EXISTS (
+           SELECT 1 FROM community_memberships cm
+           WHERE cm.community_id = c.id AND cm.user_id = $2
+         )) AS communities,
+        (SELECT COUNT(*)::int FROM bots b
+         WHERE b.status = 'online' AND ($1 = 'admin' OR EXISTS (
+           SELECT 1 FROM community_memberships cm
+           WHERE cm.community_id = b.community_id AND cm.user_id = $2
+         ))) AS active_bots,
+        (SELECT COUNT(*)::int FROM automations a
+         WHERE a.status = 'active' AND ($1 = 'admin' OR EXISTS (
+           SELECT 1 FROM community_memberships cm
+           WHERE cm.community_id = a.community_id AND cm.user_id = $2
+         ))) AS automations
+    `, [context.role, context.userId]);
 
     const communitiesResult = await query<RecentCommunity>(`
       SELECT
@@ -47,10 +59,14 @@ export async function GET() {
       FROM communities c
       LEFT JOIN bots b ON b.community_id = c.id
       LEFT JOIN channels ch ON ch.community_id = c.id
+      WHERE $1 = 'admin' OR EXISTS (
+        SELECT 1 FROM community_memberships cm
+        WHERE cm.community_id = c.id AND cm.user_id = $2
+      )
       GROUP BY c.id, c.name, c.description, c.status, c.members, c.created_at
       ORDER BY c.created_at DESC
       LIMIT 5
-    `);
+    `, [context.role, context.userId]);
 
     const logsResult = await query<AuditLog>(`
       SELECT
@@ -59,10 +75,15 @@ export async function GET() {
         details,
         community_id,
         created_at
-      FROM audit_logs
-      ORDER BY created_at DESC
+      FROM audit_logs al
+      WHERE al.community_id IS NOT NULL
+        AND ($1 = 'admin' OR EXISTS (
+          SELECT 1 FROM community_memberships cm
+          WHERE cm.community_id = al.community_id AND cm.user_id = $2
+        ))
+      ORDER BY al.created_at DESC
       LIMIT 5
-    `);
+    `, [context.role, context.userId]);
 
     const stats = statsResult.rows[0];
 

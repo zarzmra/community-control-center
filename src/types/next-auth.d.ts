@@ -1,4 +1,4 @@
-import type { DefaultSession } from "next-auth";
+export {};
 
 declare module "next-auth" {
   interface User {

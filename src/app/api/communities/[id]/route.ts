@@ -9,7 +9,7 @@ import {
   requireUuid,
   ApiError,
 } from "@/lib/api";
-import { requireCommunityAdmin } from "@/lib/authorization";
+import { requireCommunityAccess, requireCommunityAdmin } from "@/lib/authorization";
 
 type Community = {
   id: string;
@@ -31,8 +31,8 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    await requireCommunityAdmin();
     requireUuid(id, "El ID de la comunidad");
+    await requireCommunityAccess(id);
 
     const result = await query<Community>(
       `
@@ -80,8 +80,8 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
-    const session = await requireCommunityAdmin();
     requireUuid(id, "El ID de la comunidad");
+    const session = await requireCommunityAdmin(id);
     const body = await readJsonBody<{
       name: unknown;
       description?: unknown;
@@ -158,7 +158,7 @@ export async function PUT(
       "community_updated",
       `Se actualizó la comunidad "${updatedCommunity.name}"`,
       updatedCommunity.id,
-      { userId: session.user.id, entityType: "community", entityId: updatedCommunity.id },
+      { userId: session.userId, entityType: "community", entityId: updatedCommunity.id },
     );
 
     return NextResponse.json({
@@ -176,8 +176,8 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const session = await requireCommunityAdmin();
     requireUuid(id, "El ID de la comunidad");
+    const session = await requireCommunityAdmin(id);
 
     await withTransaction(async (client) => {
       const nameResult = await client.query<{ name: string }>(
@@ -194,7 +194,7 @@ export async function DELETE(
         `Se eliminó la comunidad "${nameResult.rows[0].name}"`,
         undefined,
         {
-          userId: session.user.id,
+          userId: session.userId,
           entityType: "community",
           entityId: id,
           client,
