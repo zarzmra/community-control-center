@@ -1,12 +1,14 @@
-export type CommunityStatus = "active" | "paused" | "archived";
+export type CommunityStatus = "active" | "inactive";
 
 export interface Community {
   id: string;
   name: string;
-  slug: string;
+  description: string;
   status: CommunityStatus;
-  memberCount: number;
-  createdAt: string;
+  members: number;
+  bots: number;
+  channels: number;
+  created_at: string;
 }
 
 export type BotStatus = "online" | "offline" | "error";
@@ -14,9 +16,9 @@ export type BotStatus = "online" | "offline" | "error";
 export interface Bot {
   id: string;
   name: string;
-  communityId: string;
+  community_id: string;
   status: BotStatus;
-  createdAt: string;
+  created_at: string;
 }
 
 export type ChannelType = "whatsapp" | "web" | "other";
@@ -27,7 +29,8 @@ export interface Channel {
   name: string;
   type: ChannelType;
   status: ChannelStatus;
-  communityId: string;
+  community_id: string;
+  created_at: string;
 }
 
 export type AutomationStatus = "active" | "paused" | "draft";
@@ -35,9 +38,10 @@ export type AutomationStatus = "active" | "paused" | "draft";
 export interface Automation {
   id: string;
   name: string;
-  communityId: string;
+  community_id: string;
   status: AutomationStatus;
   trigger: string;
+  created_at: string;
 }
 
 export interface DashboardMetric {

@@ -86,9 +86,9 @@ export function CommunityDetailPage({
           automationsResponse,
         ] = await Promise.all([
           fetch(`/api/communities/${id}`),
-          fetch("/api/bots"),
-          fetch("/api/channels"),
-          fetch("/api/automations"),
+          fetch(`/api/bots?communityId=${encodeURIComponent(id)}`),
+          fetch(`/api/channels?communityId=${encodeURIComponent(id)}`),
+          fetch(`/api/automations?communityId=${encodeURIComponent(id)}`),
         ]);
 
         const communityResult = await communityResponse.json();

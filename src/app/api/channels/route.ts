@@ -1,6 +1,16 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { recordAuditLog } from "@/lib/audit";
+import {
+  ApiError,
+  apiErrorResponse,
+  parsePagination,
+  readJsonBody,
+  requireEnum,
+  requireString,
+  requireUuid,
+} from "@/lib/api";
+import { requireAdmin } from "@/lib/authorization";
 
 type Channel = {
   id: string;
@@ -10,8 +20,12 @@ type Channel = {
   community_id: string;
 };
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    await requireAdmin();
+    const { limit, offset, page } = parsePagination(request);
+    const communityId = new URL(request.url).searchParams.get("communityId");
+    if (communityId) requireUuid(communityId, "El ID de la comunidad");
     const result = await query<Channel>(
       `
         SELECT
@@ -21,59 +35,49 @@ export async function GET() {
           status,
           community_id
         FROM channels
+        WHERE ($3::uuid IS NULL OR community_id = $3)
         ORDER BY created_at DESC
+        LIMIT $1 OFFSET $2
       `,
+      [limit, offset, communityId],
     );
 
     return NextResponse.json({
       ok: true,
       data: result.rows,
+      meta: { page, limit, hasMore: result.rows.length === limit },
     });
-  } catch {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "No se pudieron cargar los canales.",
-      },
-      { status: 500 },
-    );
+  } catch (error) {
+    return apiErrorResponse(error, "No se pudieron cargar los canales.");
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-
-    const name =
-      typeof body.name === "string" ? body.name.trim() : "";
-
-    const communityId =
-      typeof body.communityId === "string"
-        ? body.communityId.trim()
-        : "";
-
+    const session = await requireAdmin();
+    const body = await readJsonBody<{
+      name: unknown;
+      communityId: unknown;
+      type?: unknown;
+      status?: unknown;
+    }>(request);
+    const name = requireString(body.name, "El nombre", { max: 200 });
+    const communityId = requireUuid(body.communityId, "El ID de la comunidad");
     const type =
-      body.type === "whatsapp" ||
-      body.type === "web" ||
-      body.type === "other"
-        ? body.type
-        : "other";
-
+      body.type === undefined
+        ? "other"
+        : requireEnum(body.type, "El tipo", ["whatsapp", "web", "other"] as const);
     const status =
-      body.status === "connected" ||
-      body.status === "disconnected" ||
-      body.status === "pending"
-        ? body.status
-        : "pending";
+      body.status === undefined
+        ? "pending"
+        : requireEnum(body.status, "El estado", ["connected", "disconnected", "pending"] as const);
 
-    if (!name || !communityId) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "El nombre y la comunidad son obligatorios.",
-        },
-        { status: 400 },
-      );
+    const communityResult = await query(
+      "SELECT id FROM communities WHERE id = $1",
+      [communityId],
+    );
+    if (communityResult.rowCount === 0) {
+      throw new ApiError(404, "La comunidad especificada no existe.");
     }
 
     const result = await query<Channel>(
@@ -101,6 +105,7 @@ export async function POST(request: Request) {
       "channel_created",
       `Se creó el canal "${channel.name}"`,
       channel.community_id,
+      { userId: session.user.id, entityType: "channel", entityId: channel.id },
     );
 
     return NextResponse.json(
@@ -110,13 +115,7 @@ export async function POST(request: Request) {
       },
       { status: 201 },
     );
-  } catch {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "No se pudo crear el canal.",
-      },
-      { status: 500 },
-    );
+  } catch (error) {
+    return apiErrorResponse(error, "No se pudo crear el canal.");
   }
 }

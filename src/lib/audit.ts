@@ -1,4 +1,5 @@
 import { query } from "./db";
+import type { PoolClient } from "pg";
 
 export type AuditEventType =
   | "community_created"
@@ -16,23 +17,51 @@ export type AuditEventType =
 
 /**
  * Records an event in the audit_logs table.
- * Failure to log does not throw to avoid breaking the main operation.
+ * Standalone audit failures are reported without changing the business result.
+ * Transactional callers receive the error so the enclosing operation can roll back.
  */
 export async function recordAuditLog(
   eventType: AuditEventType,
   details: string,
   communityId?: string,
+  options: {
+    userId?: string;
+    entityType?: string;
+    entityId?: string;
+    client?: PoolClient;
+  } = {},
 ) {
+  const execute: (
+    text: string,
+    values: unknown[],
+  ) => Promise<unknown> = options.client
+    ? (text, values) => options.client!.query(text, values)
+    : (text, values) => query(text, values);
+
   try {
-    await query(
+    await execute(
       `
-      INSERT INTO audit_logs (event_type, details, community_id)
-      VALUES ($1, $2, $3)
+      INSERT INTO audit_logs (
+        event_type,
+        details,
+        community_id,
+        user_id,
+        entity_type,
+        entity_id
+      )
+      VALUES ($1, $2, $3, $4, $5, $6)
       `,
-      [eventType, details, communityId || null],
+      [
+        eventType,
+        details,
+        communityId || null,
+        options.userId || null,
+        options.entityType || null,
+        options.entityId || null,
+      ],
     );
   } catch (error) {
-    // We log to console but don't throw to prevent interrupting the main transaction
+    if (options.client) throw error;
     console.error("Failed to record audit log:", error);
   }
 }

@@ -1,6 +1,15 @@
 import { NextResponse } from "next/server";
-import { query } from "@/lib/db";
+import { query, withTransaction } from "@/lib/db";
 import { recordAuditLog } from "@/lib/audit";
+import {
+  apiErrorResponse,
+  readJsonBody,
+  requireEnum,
+  requireString,
+  requireUuid,
+  ApiError,
+} from "@/lib/api";
+import { requireCommunityAdmin } from "@/lib/authorization";
 
 type Community = {
   id: string;
@@ -22,16 +31,8 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-
-    if (!id) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "El ID de la comunidad es obligatorio.",
-        },
-        { status: 400 },
-      );
-    }
+    await requireCommunityAdmin();
+    requireUuid(id, "El ID de la comunidad");
 
     const result = await query<Community>(
       `
@@ -61,27 +62,15 @@ export async function GET(
     );
 
     if (result.rowCount === 0) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "La comunidad no existe.",
-        },
-        { status: 404 },
-      );
+      throw new ApiError(404, "La comunidad no existe.");
     }
 
     return NextResponse.json({
       ok: true,
       data: result.rows[0],
     });
-  } catch {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "No se pudo cargar la comunidad.",
-      },
-      { status: 500 },
-    );
+  } catch (error) {
+    return apiErrorResponse(error, "No se pudo cargar la comunidad.");
   }
 }
 
@@ -91,33 +80,22 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
-    const body = await request.json();
-
-    const name =
-      typeof body.name === "string"
-        ? body.name.trim()
-        : "";
-
+    const session = await requireCommunityAdmin();
+    requireUuid(id, "El ID de la comunidad");
+    const body = await readJsonBody<{
+      name: unknown;
+      description?: unknown;
+      status?: unknown;
+    }>(request);
+    const name = requireString(body.name, "El nombre", { max: 200 });
     const description =
-      typeof body.description === "string"
-        ? body.description.trim()
-        : "";
-
+      typeof body.description === "undefined"
+        ? ""
+        : requireString(body.description, "La descripción", { min: 0, max: 5000 });
     const status =
-      body.status === "active" ||
-      body.status === "inactive"
-        ? body.status
-        : null;
-
-    if (!id || !name) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "El ID y nombre de la comunidad son obligatorios.",
-        },
-        { status: 400 },
-      );
-    }
+      body.status === undefined
+        ? null
+        : requireEnum(body.status, "El estado", ["active", "inactive"] as const);
 
     let result;
 
@@ -180,20 +158,15 @@ export async function PUT(
       "community_updated",
       `Se actualizó la comunidad "${updatedCommunity.name}"`,
       updatedCommunity.id,
+      { userId: session.user.id, entityType: "community", entityId: updatedCommunity.id },
     );
 
     return NextResponse.json({
       ok: true,
       data: updatedCommunity,
     });
-  } catch {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "No se pudo actualizar la comunidad.",
-      },
-      { status: 500 },
-    );
+  } catch (error) {
+    return apiErrorResponse(error, "No se pudo actualizar la comunidad.");
   }
 }
 
@@ -203,59 +176,37 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
+    const session = await requireCommunityAdmin();
+    requireUuid(id, "El ID de la comunidad");
 
-    if (!id) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "El ID de la comunidad es obligatorio.",
-        },
-        { status: 400 },
+    await withTransaction(async (client) => {
+      const nameResult = await client.query<{ name: string }>(
+        "SELECT name FROM communities WHERE id = $1 FOR UPDATE",
+        [id],
       );
-    }
+      if (nameResult.rowCount === 0) {
+        throw new ApiError(404, "La comunidad no existe.");
+      }
 
-    // Get name before deleting for the log
-    const nameResult = await query<{ name: string }>(
-      "SELECT name FROM communities WHERE id = $1",
-      [id],
-    );
-
-    const communityName = nameResult.rows[0]?.name || id;
-
-    const result = await query(
-      `
-        DELETE FROM communities
-        WHERE id = $1
-      `,
-      [id],
-    );
-
-    if (result.rowCount === 0) {
-      return NextResponse.json(
+      await client.query("DELETE FROM communities WHERE id = $1", [id]);
+      await recordAuditLog(
+        "community_deleted",
+        `Se eliminó la comunidad "${nameResult.rows[0].name}"`,
+        undefined,
         {
-          ok: false,
-          error: "La comunidad no existe.",
+          userId: session.user.id,
+          entityType: "community",
+          entityId: id,
+          client,
         },
-        { status: 404 },
       );
-    }
-
-    await recordAuditLog(
-      "community_deleted",
-      `Se eliminó la comunidad "${communityName}"`,
-    );
+    });
 
     return NextResponse.json({
       ok: true,
       data: { id },
     });
-  } catch {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "No se pudo eliminar la comunidad.",
-      },
-      { status: 500 },
-    );
+  } catch (error) {
+    return apiErrorResponse(error, "No se pudo eliminar la comunidad.");
   }
 }

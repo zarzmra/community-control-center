@@ -1,6 +1,16 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { recordAuditLog } from "@/lib/audit";
+import {
+  ApiError,
+  apiErrorResponse,
+  parsePagination,
+  readJsonBody,
+  requireEnum,
+  requireString,
+  requireUuid,
+} from "@/lib/api";
+import { requireAdmin } from "@/lib/authorization";
 
 type Automation = {
   id: string;
@@ -10,8 +20,12 @@ type Automation = {
   trigger: string;
 };
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    await requireAdmin();
+    const { limit, offset, page } = parsePagination(request);
+    const communityId = new URL(request.url).searchParams.get("communityId");
+    if (communityId) requireUuid(communityId, "El ID de la comunidad");
     const result = await query<Automation>(
       `
         SELECT
@@ -21,57 +35,49 @@ export async function GET() {
           status,
           trigger
         FROM automations
+        WHERE ($3::uuid IS NULL OR community_id = $3)
         ORDER BY created_at DESC
+        LIMIT $1 OFFSET $2
       `,
+      [limit, offset, communityId],
     );
 
     return NextResponse.json({
       ok: true,
       data: result.rows,
+      meta: { page, limit, hasMore: result.rows.length === limit },
     });
-  } catch {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "No se pudieron cargar las automatizaciones.",
-      },
-      { status: 500 },
-    );
+  } catch (error) {
+    return apiErrorResponse(error, "No se pudieron cargar las automatizaciones.");
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-
-    const name =
-      typeof body.name === "string" ? body.name.trim() : "";
-
-    const communityId =
-      typeof body.communityId === "string"
-        ? body.communityId.trim()
-        : "";
-
+    const session = await requireAdmin();
+    const body = await readJsonBody<{
+      name: unknown;
+      communityId: unknown;
+      trigger?: unknown;
+      status?: unknown;
+    }>(request);
+    const name = requireString(body.name, "El nombre", { max: 200 });
+    const communityId = requireUuid(body.communityId, "El ID de la comunidad");
     const trigger =
-      typeof body.trigger === "string"
-        ? body.trigger.trim()
-        : "";
-
+      body.trigger === undefined
+        ? ""
+        : requireString(body.trigger, "El trigger", { min: 0, max: 1000 });
     const status =
-      body.status === "active" ||
-      body.status === "paused" ||
-      body.status === "draft"
-        ? body.status
-        : "draft";
+      body.status === undefined
+        ? "draft"
+        : requireEnum(body.status, "El estado", ["active", "paused", "draft"] as const);
 
-    if (!name || !communityId) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "El nombre y la comunidad son obligatorios.",
-        },
-        { status: 400 },
-      );
+    const communityResult = await query(
+      "SELECT id FROM communities WHERE id = $1",
+      [communityId],
+    );
+    if (communityResult.rowCount === 0) {
+      throw new ApiError(404, "La comunidad especificada no existe.");
     }
 
     const result = await query<Automation>(
@@ -99,6 +105,7 @@ export async function POST(request: Request) {
       "automation_created",
       `Se creó la automatización "${automation.name}"`,
       automation.community_id,
+      { userId: session.user.id, entityType: "automation", entityId: automation.id },
     );
 
     return NextResponse.json(
@@ -108,13 +115,7 @@ export async function POST(request: Request) {
       },
       { status: 201 },
     );
-  } catch {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "No se pudo crear la automatización.",
-      },
-      { status: 500 },
-    );
+  } catch (error) {
+    return apiErrorResponse(error, "No se pudo crear la automatización.");
   }
 }

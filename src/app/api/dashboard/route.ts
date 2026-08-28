@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { apiErrorResponse } from "@/lib/api";
+import { requireAdmin } from "@/lib/authorization";
 
 type RecentCommunity = {
   id: string;
@@ -21,6 +23,7 @@ type AuditLog = {
 
 export async function GET() {
   try {
+    await requireAdmin();
     const statsResult = await query<{
       communities: number;
       active_bots: number;
@@ -95,13 +98,10 @@ export async function GET() {
         },
       ],
     });
-  } catch {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "No se pudieron cargar las estadísticas del Dashboard.",
-      },
-      { status: 500 },
+  } catch (error) {
+    return apiErrorResponse(
+      error,
+      "No se pudieron cargar las estadísticas del Dashboard.",
     );
   }
 }

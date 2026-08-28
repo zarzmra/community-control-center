@@ -1,6 +1,15 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { recordAuditLog } from "@/lib/audit";
+import {
+  ApiError,
+  apiErrorResponse,
+  readJsonBody,
+  requireEnum,
+  requireString,
+  requireUuid,
+} from "@/lib/api";
+import { requireAdmin } from "@/lib/authorization";
 
 type Automation = {
   id: string;
@@ -10,154 +19,86 @@ type Automation = {
   trigger: string;
 };
 
-type RouteContext = {
-  params: Promise<{ id: string }>;
-};
+type RouteContext = { params: Promise<{ id: string }> };
 
-export async function PUT(
-  request: Request,
-  { params }: RouteContext,
-) {
+export async function PUT(request: Request, { params }: RouteContext) {
   try {
     const { id } = await params;
-    const body = await request.json();
-
-    const name =
-      typeof body.name === "string" ? body.name.trim() : "";
-
-    const communityId =
-      typeof body.communityId === "string"
-        ? body.communityId.trim()
-        : "";
-
-    const trigger =
-      typeof body.trigger === "string"
-        ? body.trigger.trim()
-        : "";
-
-    const status =
-      body.status === "active" ||
-      body.status === "paused" ||
-      body.status === "draft"
-        ? body.status
-        : null;
-
-    if (!id || !name || !communityId || !status) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "El nombre, comunidad y estado de la automatización son obligatorios.",
-        },
-        { status: 400 },
-      );
+    const session = await requireAdmin();
+    requireUuid(id, "El ID de la automatización");
+    const body = await readJsonBody<{
+      name: unknown;
+      communityId: unknown;
+      trigger: unknown;
+      status: unknown;
+    }>(request);
+    const name = requireString(body.name, "El nombre", { max: 200 });
+    const communityId = requireUuid(body.communityId, "El ID de la comunidad");
+    const trigger = requireString(body.trigger, "El trigger", {
+      min: 0,
+      max: 1000,
+    });
+    const status = requireEnum(body.status, "El estado", [
+      "active",
+      "paused",
+      "draft",
+    ] as const);
+    const communityResult = await query(
+      "SELECT id FROM communities WHERE id = $1",
+      [communityId],
+    );
+    if (communityResult.rowCount === 0) {
+      throw new ApiError(404, "La comunidad especificada no existe.");
     }
 
     const result = await query<Automation>(
-      `
-        UPDATE automations
-        SET
-          name = $1,
-          community_id = $2,
-          trigger = $3,
-          status = $4,
-          updated_at = now()
-        WHERE id = $5
-        RETURNING
-          id,
-          name,
-          community_id,
-          status,
-          trigger
-      `,
+      `UPDATE automations
+       SET name = $1, community_id = $2, trigger = $3, status = $4, updated_at = now()
+       WHERE id = $5
+       RETURNING id, name, community_id, status, trigger`,
       [name, communityId, trigger, status, id],
     );
 
     if (result.rowCount === 0) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "La automatización no existe.",
-        },
-        { status: 404 },
-      );
+      throw new ApiError(404, "La automatización no existe.");
     }
-
     const automation = result.rows[0];
-
     await recordAuditLog(
       "automation_updated",
       `Se actualizó la automatización "${automation.name}"`,
       automation.community_id,
+      { userId: session.user.id, entityType: "automation", entityId: automation.id },
     );
-
-    return NextResponse.json({
-      ok: true,
-      data: automation,
-    });
-  } catch {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "No se pudo actualizar la automatización.",
-      },
-      { status: 500 },
-    );
+    return NextResponse.json({ ok: true, data: automation });
+  } catch (error) {
+    return apiErrorResponse(error, "No se pudo actualizar la automatización.");
   }
 }
 
-export async function DELETE(
-  _request: Request,
-  { params }: RouteContext,
-) {
+export async function DELETE(_request: Request, { params }: RouteContext) {
   try {
     const { id } = await params;
-
-    // Get info before deleting for the log
-    const automationResult = await query<Automation>(
+    const session = await requireAdmin();
+    requireUuid(id, "El ID de la automatización");
+    const automationResult = await query<{ name: string; community_id: string }>(
       "SELECT name, community_id FROM automations WHERE id = $1",
       [id],
     );
-
     const automationInfo = automationResult.rows[0];
-
-    const result = await query(
-      `
-        DELETE FROM automations
-        WHERE id = $1
-      `,
-      [id],
-    );
-
+    const result = await query("DELETE FROM automations WHERE id = $1", [id]);
     if (result.rowCount === 0) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "La automatización no existe.",
-        },
-        { status: 404 },
-      );
+      throw new ApiError(404, "La automatización no existe.");
     }
-
     if (automationInfo) {
       await recordAuditLog(
         "automation_deleted",
         `Se eliminó la automatización "${automationInfo.name}"`,
         automationInfo.community_id,
+        { userId: session.user.id, entityType: "automation", entityId: id },
       );
     }
-
-    return NextResponse.json({
-      ok: true,
-      data: { id },
-    });
-  } catch {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "No se pudo eliminar la automatización.",
-      },
-      { status: 500 },
-    );
+    return NextResponse.json({ ok: true, data: { id } });
+  } catch (error) {
+    return apiErrorResponse(error, "No se pudo eliminar la automatización.");
   }
 }

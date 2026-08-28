@@ -1,6 +1,7 @@
 import type { NextAuthConfig } from "next-auth";
 import type { JWT } from "next-auth/jwt";
 import type { User } from "next-auth";
+import type { Session } from "next-auth";
 
 const authConfig = {
   pages: {
@@ -20,7 +21,7 @@ const authConfig = {
 
       return token;
     },
-    session({ session, token }: { session: any; token: JWT }) {
+    session({ session, token }: { session: Session; token: JWT }) {
       if (session.user && token.id && token.role) {
         session.user.id = token.id;
         session.user.role = token.role;
