@@ -135,6 +135,7 @@ export async function DELETE(request: Request) {
         throw new ApiError(404, "La comunidad no existe.");
       }
 
+
       const communityName = nameResult.rows[0].name;
       await client.query("DELETE FROM communities WHERE id = $1", [id]);
       await recordAuditLog(

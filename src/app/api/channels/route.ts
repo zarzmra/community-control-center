@@ -17,6 +17,12 @@ type Channel = {
   name: string;
   type: "whatsapp" | "web" | "other";
   status: "connected" | "disconnected" | "pending";
+  connection_status:
+    | "configured"
+    | "pending"
+    | "connected"
+    | "disconnected"
+    | "error";
   community_id: string;
 };
 
@@ -33,6 +39,7 @@ export async function GET(request: Request) {
           name,
           type,
           status,
+          connection_status,
           community_id
         FROM channels
         WHERE ($3::uuid IS NULL OR community_id = $3)
@@ -63,6 +70,7 @@ export async function POST(request: Request) {
       communityId: unknown;
       type?: unknown;
       status?: unknown;
+      connectionStatus?: unknown;
     }>(request);
     const name = requireString(body.name, "El nombre", { max: 200 });
     const communityId = requireUuid(body.communityId, "El ID de la comunidad");
@@ -75,6 +83,16 @@ export async function POST(request: Request) {
       body.status === undefined
         ? "pending"
         : requireEnum(body.status, "El estado", ["connected", "disconnected", "pending"] as const);
+    const connectionStatus =
+      body.connectionStatus === undefined
+        ? status
+        : requireEnum(body.connectionStatus, "El estado de conexión", [
+            "configured",
+            "pending",
+            "connected",
+            "disconnected",
+            "error",
+          ] as const);
 
     const communityResult = await query(
       "SELECT id FROM communities WHERE id = $1",
@@ -90,17 +108,19 @@ export async function POST(request: Request) {
           name,
           type,
           status,
+          connection_status,
           community_id
         )
-        VALUES ($1, $2, $3, $4)
+        VALUES ($1, $2, $3, $4, $5)
         RETURNING
           id,
           name,
           type,
           status,
+          connection_status,
           community_id
       `,
-      [name, type, status, communityId],
+      [name, type, status, connectionStatus, communityId],
     );
 
     const channel = result.rows[0];

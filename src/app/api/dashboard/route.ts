@@ -36,7 +36,7 @@ export async function GET() {
            WHERE cm.community_id = c.id AND cm.user_id = $2
          )) AS communities,
         (SELECT COUNT(*)::int FROM bots b
-         WHERE b.status = 'online' AND ($1 = 'admin' OR EXISTS (
+         WHERE b.status = 'running' AND ($1 = 'admin' OR EXISTS (
            SELECT 1 FROM community_memberships cm
            WHERE cm.community_id = b.community_id AND cm.user_id = $2
          ))) AS active_bots,

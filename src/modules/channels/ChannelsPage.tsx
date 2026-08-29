@@ -12,6 +12,12 @@ type Channel = {
   name: string;
   type: "whatsapp" | "web" | "other";
   status: "connected" | "disconnected" | "pending";
+  connection_status:
+    | "configured"
+    | "pending"
+    | "connected"
+    | "disconnected"
+    | "error";
   community_id: string;
 };
 
@@ -245,6 +251,27 @@ export function ChannelsPage() {
     if (channelStatus === "connected") return "Conectado";
     if (channelStatus === "disconnected") return "Desconectado";
     return "Pendiente";
+  }
+
+  function getConnectionStatusLabel(
+    connectionStatus: Channel["connection_status"],
+  ) {
+    return {
+      configured: "Configurado",
+      pending: "Pendiente de conexión",
+      connected: "Conectado",
+      disconnected: "Desconectado",
+      error: "Error de conexión",
+    }[connectionStatus];
+  }
+
+  function getConnectionStatusVariant(
+    connectionStatus: Channel["connection_status"],
+  ) {
+    if (connectionStatus === "connected") return "success" as const;
+    if (connectionStatus === "error") return "danger" as const;
+    if (connectionStatus === "pending") return "warning" as const;
+    return "neutral" as const;
   }
 
   function getStatusVariant(
@@ -509,6 +536,16 @@ export function ChannelsPage() {
                   >
                     {getStatusLabel(
                       channel.status,
+                    )}
+                  </Badge>
+
+                  <Badge
+                    variant={getConnectionStatusVariant(
+                      channel.connection_status,
+                    )}
+                  >
+                    {getConnectionStatusLabel(
+                      channel.connection_status,
                     )}
                   </Badge>
                 </div>

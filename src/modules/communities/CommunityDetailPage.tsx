@@ -24,7 +24,7 @@ type Bot = {
   id: string;
   name: string;
   community_id: string;
-  status: "online" | "offline" | "error";
+  status: "draft" | "stopped" | "starting" | "running" | "stopping" | "error";
 };
 
 type Channel = {
@@ -32,6 +32,12 @@ type Channel = {
   name: string;
   type: "whatsapp" | "web" | "other";
   status: "connected" | "disconnected" | "pending";
+  connection_status:
+    | "configured"
+    | "pending"
+    | "connected"
+    | "disconnected"
+    | "error";
   community_id: string;
 };
 
@@ -542,7 +548,7 @@ export function CommunityDetailPage({
                   <strong>{bot.name}</strong>{" "}
                   <Badge
                     variant={
-                      bot.status === "online"
+                      bot.status === "running" || bot.status === "starting"
                         ? "success"
                         : bot.status === "error"
                           ? "danger"
@@ -578,6 +584,19 @@ export function CommunityDetailPage({
                     }
                   >
                     {channel.status}
+                  </Badge>
+                  <Badge
+                    variant={
+                      channel.connection_status === "connected"
+                        ? "success"
+                        : channel.connection_status === "error"
+                          ? "danger"
+                          : channel.connection_status === "pending"
+                            ? "warning"
+                            : "neutral"
+                    }
+                  >
+                    {channel.connection_status}
                   </Badge>
                 </div>
               ))}

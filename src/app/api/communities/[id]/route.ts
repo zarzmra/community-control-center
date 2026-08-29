@@ -210,3 +210,5 @@ export async function DELETE(
     return apiErrorResponse(error, "No se pudo eliminar la comunidad.");
   }
 }
+
+export const PATCH = PUT;

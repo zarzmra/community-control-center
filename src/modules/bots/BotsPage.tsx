@@ -11,7 +11,14 @@ type Bot = {
   id: string;
   name: string;
   community_id: string;
-  status: "online" | "offline" | "error";
+  status: "draft" | "stopped" | "starting" | "running" | "stopping" | "error";
+  channel_id: string | null;
+  description: string;
+  command_prefix: string;
+  config: Record<string, unknown>;
+  last_error: string | null;
+  last_error_at: string | null;
+  last_activity_at: string | null;
   created_at: string;
 };
 
@@ -20,9 +27,16 @@ type Community = {
   name: string;
 };
 
+type Channel = {
+  id: string;
+  name: string;
+  community_id: string;
+};
+
 export function BotsPage() {
   const [bots, setBots] = useState<Bot[]>([]);
   const [communities, setCommunities] = useState<Community[]>([]);
+  const [channels, setChannels] = useState<Channel[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -35,7 +49,9 @@ export function BotsPage() {
 
   const [name, setName] = useState("");
   const [communityId, setCommunityId] = useState("");
-  const [status, setStatus] = useState<Bot["status"]>("offline");
+  const [status, setStatus] = useState<Bot["status"]>("draft");
+  const [channelId, setChannelId] = useState<string | null>(null);
+  const [actionId, setActionId] = useState<string | null>(null);
 
   async function loadBots() {
     try {
@@ -94,10 +110,28 @@ export function BotsPage() {
     }
   }
 
+  async function loadChannels() {
+    try {
+      const response = await fetch("/api/channels");
+      if (!response.ok) {
+        throw new Error("No se pudieron cargar los canales.");
+      }
+      const result: { data: Channel[] } = await response.json();
+      setChannels(result.data);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "No se pudieron cargar los canales.",
+      );
+    }
+  }
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void loadBots();
       void loadCommunities();
+      void loadChannels();
     }, 0);
 
     return () => window.clearTimeout(timer);
@@ -105,7 +139,8 @@ export function BotsPage() {
 
   function resetForm() {
     setName("");
-    setStatus("offline");
+    setStatus("draft");
+    setChannelId(null);
     setEditingBot(null);
     setShowForm(false);
     setError(null);
@@ -116,6 +151,7 @@ export function BotsPage() {
     setName(bot.name);
     setCommunityId(bot.community_id);
     setStatus(bot.status);
+    setChannelId(bot.channel_id);
     setShowForm(true);
     setError(null);
   }
@@ -150,7 +186,8 @@ export function BotsPage() {
             },
             body: JSON.stringify({
               name: name.trim(),
-              status,
+              communityId,
+              channelId,
             }),
           },
         );
@@ -191,6 +228,7 @@ export function BotsPage() {
           name: name.trim(),
           communityId,
           status,
+          channelId,
         }),
       });
 
@@ -203,7 +241,7 @@ export function BotsPage() {
       }
 
       setName("");
-      setStatus("offline");
+      setStatus("draft");
       setShowForm(false);
 
       await loadBots();
@@ -215,6 +253,37 @@ export function BotsPage() {
       );
     } finally {
       setCreating(false);
+    }
+
+  }
+
+  async function handleLifecycle(
+    bot: Bot,
+    action: "start" | "stop" | "restart",
+  ) {
+    setActionId(bot.id);
+    setError(null);
+    try {
+      const response = await fetch(`/api/bots/${bot.id}/${action}`, {
+        method: "POST",
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(
+          typeof result.error === "string"
+            ? result.error
+            : "No se pudo cambiar el estado del bot.",
+        );
+      }
+      await loadBots();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "No se pudo cambiar el estado del bot.",
+      );
+    } finally {
+      setActionId(null);
     }
   }
 
@@ -278,21 +347,20 @@ export function BotsPage() {
   function getStatusLabel(
     botStatus: Bot["status"],
   ) {
-    if (botStatus === "online") {
-      return "Online";
-    }
-
-    if (botStatus === "error") {
-      return "Error";
-    }
-
-    return "Offline";
+    return {
+      draft: "Borrador",
+      stopped: "Detenido",
+      starting: "Iniciando",
+      running: "En ejecución",
+      stopping: "Deteniendo",
+      error: "Error",
+    }[botStatus];
   }
 
   function getStatusVariant(
     botStatus: Bot["status"],
   ): "success" | "danger" | "neutral" {
-    if (botStatus === "online") {
+    if (botStatus === "running" || botStatus === "starting") {
       return "success";
     }
 
@@ -420,17 +488,34 @@ export function BotsPage() {
                 }
                 disabled={saving || creating}
               >
-                <option value="offline">
-                  Offline
+                <option value="draft">
+                  Borrador
                 </option>
-
-                <option value="online">
-                  Online
+                <option value="stopped">
+                  Detenido
                 </option>
-
                 <option value="error">
                   Error
                 </option>
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="bot-channel">Canal</label>
+              <select
+                id="bot-channel"
+                value={channelId ?? ""}
+                onChange={(event) => setChannelId(event.target.value || null)}
+                disabled={saving || creating}
+              >
+                <option value="">Sin canal asociado</option>
+                {channels
+                  .filter((channel) => channel.community_id === communityId)
+                  .map((channel) => (
+                    <option key={channel.id} value={channel.id}>
+                      {channel.name}
+                    </option>
+                  ))}
               </select>
             </div>
 
@@ -512,6 +597,12 @@ export function BotsPage() {
                       bot.community_id,
                     )}
                   </p>
+                  <p>
+                    Canal:{" "}
+                    {bot.channel_id
+                      ? channels.find((channel) => channel.id === bot.channel_id)?.name ?? "Canal no disponible"
+                      : "Sin canal asociado"}
+                  </p>
 
                   <Badge
                     variant={getStatusVariant(
@@ -522,6 +613,10 @@ export function BotsPage() {
                       bot.status,
                     )}
                   </Badge>
+                  {bot.last_error ? <p>Error: {bot.last_error}</p> : null}
+                  {bot.last_activity_at ? (
+                    <p>Última actividad: {new Date(bot.last_activity_at).toLocaleString("es-MX")}</p>
+                  ) : null}
                 </div>
 
                 <div
@@ -531,6 +626,21 @@ export function BotsPage() {
                     flexWrap: "wrap",
                   }}
                 >
+                  {bot.status === "stopped" || bot.status === "draft" || bot.status === "error" ? (
+                    <Button type="button" onClick={() => void handleLifecycle(bot, "start")} disabled={actionId === bot.id}>
+                      {actionId === bot.id ? "Procesando..." : "Iniciar"}
+                    </Button>
+                  ) : null}
+                  {bot.status === "running" ? (
+                    <>
+                      <Button type="button" onClick={() => void handleLifecycle(bot, "stop")} disabled={actionId === bot.id}>
+                        {actionId === bot.id ? "Procesando..." : "Detener"}
+                      </Button>
+                      <Button type="button" variant="secondary" onClick={() => void handleLifecycle(bot, "restart")} disabled={actionId === bot.id}>
+                        Reiniciar
+                      </Button>
+                    </>
+                  ) : null}
                   <Button
                     type="button"
                     onClick={() =>
