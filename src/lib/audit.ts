@@ -25,6 +25,10 @@ export type AuditEventType =
   | "bot_restarted"
   | "bot_error"
   | "bot_operation_created"
+  | "bot_operation_claimed"
+  | "bot_operation_started"
+  | "bot_operation_completed"
+  | "bot_operation_failed"
   | "bot_channel_attached"
   | "bot_channel_detached";
 
